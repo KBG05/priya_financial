@@ -1,0 +1,212 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&display=swap');
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Tailwind v4 theme mapping — must explicitly map CSS vars to utility classes ── */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --radius: 0.5rem;
+}
+
+:root {
+  /* Light — off-white page, elevated white cards, teal primary, amber accent */
+  --background: 220 18% 93%;
+  --foreground: 222 25% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 25% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 25% 10%;
+  --primary: 174 52% 36%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 174 22% 86%;
+  --secondary-foreground: 174 42% 22%;
+  --muted: 220 14% 88%;
+  --muted-foreground: 220 12% 44%;
+  --accent: 38 72% 86%;
+  --accent-foreground: 38 62% 28%;
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 16% 74%;
+  /* visible but not harsh */
+  --input: 220 16% 74%;
+  --ring: 174 52% 36%;
+  --table-header-bg: 174 26% 86%;
+
+  --sidebar-background: 222 24% 12%;
+  --sidebar-foreground: 220 14% 80%;
+  --sidebar-primary: 174 50% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 174 40% 22%;
+  /* teal-ish accent for active */
+  --sidebar-accent-foreground: 174 70% 82%;
+  --sidebar-border: 222 18% 20%;
+  --sidebar-ring: 174 50% 50%;
+}
+
+.dark {
+  --background: 222 28% 7%;
+  --foreground: 220 16% 90%;
+  --card: 222 24% 12%;
+  --card-foreground: 220 16% 90%;
+  --popover: 222 22% 15%;
+  /* lifted above card for depth */
+  --popover-foreground: 220 16% 90%;
+  --primary: 174 50% 50%;
+  --primary-foreground: 222 28% 8%;
+  --secondary: 222 20% 20%;
+  --secondary-foreground: 220 14% 84%;
+  --muted: 222 20% 16%;
+  --muted-foreground: 220 12% 52%;
+  --accent: 222 20% 20%;
+  --accent-foreground: 174 50% 70%;
+  --destructive: 0 60% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 16% 28%;
+  /* notably more visible in dark */
+  --input: 222 16% 28%;
+  --ring: 174 50% 50%;
+  --table-header-bg: 174 20% 15%;
+
+  --sidebar-background: 222 28% 6%;
+  --sidebar-foreground: 220 12% 78%;
+  --sidebar-primary: 174 50% 50%;
+  --sidebar-primary-foreground: 222 28% 8%;
+  --sidebar-accent: 174 35% 18%;
+  /* teal dark for active sidebar bg */
+  --sidebar-accent-foreground: 174 70% 78%;
+  --sidebar-border: 222 20% 16%;
+  --sidebar-ring: 174 50% 50%;
+}
+
+/* ── Base ───────────────────────────────── */
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* ── Radix collapsible animation ──────────── */
+.collapsible-content {
+  overflow: hidden;
+}
+
+.collapsible-content[data-state="open"] {
+  animation: collapsible-down 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collapsible-content[data-state="closed"] {
+  animation: collapsible-up 0.18s cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/* ── Table header accent ──────────────────── */
+.ledger-header {
+  background-color: hsl(var(--table-header-bg));
+}
+
+/* ── Section divider ──────────────────────── */
+.section-divider {
+  height: 1px;
+  background: hsl(var(--border) / 0.5);
+}
+
+/* ── Slim scrollbar ───────────────────────── */
+.slim-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.slim-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.slim-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+/* ── Tabular numbers ──────────────────────── */
+.tabnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+}
+
+/* ── Card elevation ───────────────────────── */
+.card-elevated {
+  box-shadow: 0 2px 12px -2px hsl(220 30% 8% / 0.08), 0 1px 3px -1px hsl(220 30% 8% / 0.05);
+}
+
+.dark .card-elevated {
+  box-shadow: 0 4px 24px -4px hsl(0 0% 0% / 0.45), 0 1px 6px -1px hsl(0 0% 0% / 0.28);
+}
