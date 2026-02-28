@@ -13,7 +13,9 @@ import os
 import sqlite3
 from pathlib import Path
 from typing import Any
+from dotenv import load_dotenv
 
+load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
@@ -42,7 +44,8 @@ def query(sql: str, params: dict = {}) -> list[dict]:
             import psycopg2.extras
             # Convert :name style to %(name)s for psycopg2
             pg_sql = sql
-            for k in params:
+            # Sort keys by length descending to prevent :m1 from matching inside :m10
+            for k in sorted(params.keys(), key=len, reverse=True):
                 pg_sql = pg_sql.replace(f":{k}", f"%({k})s")
             cur.execute(pg_sql, params)
             cols = [d[0] for d in cur.description]
