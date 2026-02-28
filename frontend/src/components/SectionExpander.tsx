@@ -59,7 +59,7 @@ export function SectionExpander({
                                             "grid-cols-1 md:grid-cols-3"
                                 )}
                             >
-                                {heroes.slice(0, n).map((h, i) => (
+                                {heroes.slice(0, n).map((h) => (
                                     <MetricCard
                                         key={h.title}
                                         title={h.title} value={h.value} prevValue={h.prevValue}

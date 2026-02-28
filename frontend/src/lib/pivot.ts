@@ -5,7 +5,6 @@
 import type { ColDef } from "@/components/LedgerTable";
 import type { ViewMode } from "@/types";
 import { fmt } from "@/lib/format";
-import { MONTH_ORDER } from "@/types";
 
 interface Row { month: string;[key: string]: any; }
 

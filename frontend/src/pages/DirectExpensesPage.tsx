@@ -7,7 +7,7 @@ import type { ViewMode } from "@/types";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
 
-export function DirectExpensesPage({ months, viewMode, prevMonths }: Props) {
+export function DirectExpensesPage({ months, viewMode }: Props) {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
