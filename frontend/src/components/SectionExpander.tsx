@@ -9,6 +9,7 @@ export interface SectionHero {
     title: string;
     value: number | null;
     prevValue?: number | null;
+    history?: number[];
     rupee?: boolean;
     pct?: boolean;
     deltaMode?: "default" | "neutral" | "inverse";
@@ -58,6 +59,7 @@ export function SectionExpander({
                                     <MetricCard
                                         key={h.title}
                                         title={h.title} value={h.value} prevValue={h.prevValue}
+                                        history={h.history}
                                         rupee={h.rupee} pct={h.pct} deltaMode={h.deltaMode} compact
                                     />
                                 ))}

@@ -3,7 +3,7 @@
 export const MONTH_ORDER = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"] as const;
 export type Month = typeof MONTH_ORDER[number];
 
-export type ViewMode = "single" | "quarterly" | "mty-all" | "comparison";
+export type ViewMode = "single" | "quarterly" | "mty-all";
 
 export interface Pal1Row {
     month: string;

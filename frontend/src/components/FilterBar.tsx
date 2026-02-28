@@ -35,12 +35,13 @@ export function FilterBar({
         const vm = v as ViewMode;
         onViewModeChange(vm);
         const last = availableMonths[availableMonths.length - 1];
-        if (vm === "single" || vm === "comparison") {
+        if (vm === "single") {
             onMonthsChange([last]);
         } else if (vm === "quarterly") {
             const idx = availableMonths.indexOf(last);
             onMonthsChange(availableMonths.slice(Math.max(0, idx - 2), idx + 1));
         } else {
+            // mty-all
             const idx = MONTH_ORDER.indexOf(last as any);
             onMonthsChange(MONTH_ORDER.slice(0, idx + 1).filter(m => availableMonths.includes(m)));
         }
@@ -77,7 +78,6 @@ export function FilterBar({
                     <SelectContent {...scProps}>
                         <SelectItem value="single">Single Month</SelectItem>
                         <SelectItem value="quarterly">Quarterly</SelectItem>
-                        <SelectItem value="comparison">Month vs YTD</SelectItem>
                         {isMtyTab && <SelectItem value="mty-all">MTY All Months</SelectItem>}
                     </SelectContent>
                 </Select>
@@ -85,12 +85,10 @@ export function FilterBar({
 
             <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
 
-            {/* Single / Comparison month picker */}
-            {(viewMode === "single" || viewMode === "comparison") && (
+            {/* Single month picker */}
+            {viewMode === "single" && (
                 <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        {viewMode === "comparison" ? "Month (YTD = Apr→↑)" : "Month"}
-                    </label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Month</label>
                     <Select value={curMonth} onValueChange={m => onMonthsChange([m])}>
                         <SelectTrigger className="w-28 h-8 bg-background border-border text-sm">
                             <SelectValue />

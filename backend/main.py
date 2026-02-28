@@ -16,9 +16,14 @@ FY = os.getenv("FY_SUFFIX", "25_26")
 MONTH_ORDER = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"]
 
 app = FastAPI(title="MIS Dashboard API", version="1.0.0")
+
+# Parse ALLOWED_ORIGINS from env, fallback to localhost for dev
+origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+allowed_origins = [o.strip() for o in origins_str.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

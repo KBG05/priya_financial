@@ -44,7 +44,8 @@
   --card-foreground: 222 25% 10%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 25% 10%;
-  --primary: 174 52% 36%;
+  --primary: 173 42% 34%;
+  /* deep mint — base of #BADFDB */
   --primary-foreground: 0 0% 100%;
   --secondary: 174 22% 86%;
   --secondary-foreground: 174 42% 22%;
@@ -57,18 +58,21 @@
   --border: 220 16% 74%;
   /* visible but not harsh */
   --input: 220 16% 74%;
-  --ring: 174 52% 36%;
-  --table-header-bg: 174 26% 86%;
+  --ring: 173 42% 34%;
+  --table-header-bg: 173 37% 82%;
+  /* ≈ #BADFDB tint */
 
   --sidebar-background: 222 24% 12%;
-  --sidebar-foreground: 220 14% 80%;
+  --sidebar-foreground: 0 0% 88%;
+  /* near-white — sidebar is always dark bg */
   --sidebar-primary: 174 50% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 174 40% 22%;
-  /* teal-ish accent for active */
-  --sidebar-accent-foreground: 174 70% 82%;
-  --sidebar-border: 222 18% 20%;
-  --sidebar-ring: 174 50% 50%;
+  --sidebar-accent: 173 32% 20%;
+  /* dark mint bg for active */
+  --sidebar-accent-foreground: 173 37% 80%;
+  /* = #BADFDB */
+  --sidebar-border: 222 18% 22%;
+  --sidebar-ring: 173 42% 34%;
 }
 
 .dark {
@@ -79,7 +83,8 @@
   --popover: 222 22% 15%;
   /* lifted above card for depth */
   --popover-foreground: 220 16% 90%;
-  --primary: 174 50% 50%;
+  --primary: 173 37% 80%;
+  /* #BADFDB in dark mode */
   --primary-foreground: 222 28% 8%;
   --secondary: 222 20% 20%;
   --secondary-foreground: 220 14% 84%;
@@ -92,18 +97,20 @@
   --border: 222 16% 28%;
   /* notably more visible in dark */
   --input: 222 16% 28%;
-  --ring: 174 50% 50%;
-  --table-header-bg: 174 20% 15%;
+  --ring: 173 37% 80%;
+  --table-header-bg: 173 28% 16%;
+  /* dimmed #BADFDB family */
 
   --sidebar-background: 222 28% 6%;
   --sidebar-foreground: 220 12% 78%;
   --sidebar-primary: 174 50% 50%;
   --sidebar-primary-foreground: 222 28% 8%;
-  --sidebar-accent: 174 35% 18%;
-  /* teal dark for active sidebar bg */
-  --sidebar-accent-foreground: 174 70% 78%;
+  --sidebar-accent: 173 28% 16%;
+  /* dark mint bg */
+  --sidebar-accent-foreground: 173 37% 80%;
+  /* = #BADFDB */
   --sidebar-border: 222 20% 16%;
-  --sidebar-ring: 174 50% 50%;
+  --sidebar-ring: 173 37% 80%;
 }
 
 /* ── Base ───────────────────────────────── */

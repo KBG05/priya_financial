@@ -2,6 +2,31 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { fmt, calcDelta } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+/** Mini SVG trend sparkline — drawn from an array of historical values */
+function MiniSparkline({ values }: { values: number[] }) {
+    if (values.length < 2) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = (max - min) || 1;
+    const W = 52, H = 18;
+    const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * W;
+        const y = H - ((v - min) / range) * H;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    const last = values[values.length - 1];
+    const up = last >= values[0];
+    const color = up ? "hsl(174 50% 50%)" : "hsl(0 60% 50%)";
+    const dotY = (H - ((last - min) / range) * H).toFixed(1);
+    return (
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="opacity-80 mt-0.5">
+            <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx={W} cy={dotY} r="2.5" fill={color} />
+        </svg>
+    );
+}
+
 interface MetricCardProps {
     title: string;
     value: number | null;
@@ -10,17 +35,19 @@ interface MetricCardProps {
     pct?: boolean;
     /** 'default'=green↑red↓, 'neutral'=muted always, 'inverse'=green↓red↑ */
     deltaMode?: "default" | "neutral" | "inverse";
-    /** compact variant removes some padding */
+    /** compact variant for inside collapsibles */
     compact?: boolean;
+    /** historical series for mini sparkline — shows trend line when ≥2 values */
+    history?: number[];
     className?: string;
 }
 
 export function MetricCard({
-    title, value, prevValue, rupee, pct, deltaMode = "default", compact, className
+    title, value, prevValue, rupee, pct,
+    deltaMode = "default", compact, history, className
 }: MetricCardProps) {
     const formatted = fmt(value, { rupee, pct });
     const isNeg = (value ?? 0) < 0;
-
     const delta = prevValue != null && value != null ? calcDelta(value, prevValue) : null;
 
     const getDeltaColor = () => {
@@ -32,14 +59,29 @@ export function MetricCard({
 
     const DeltaIcon = delta == null ? null : delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
 
+    // KPI-style: left border accent based on value sign (when history present)
+    const hasHistory = history && history.length >= 2;
+    const borderAccent = hasHistory
+        ? (value == null ? "border-l-4 border-border/40"
+            : value >= 0 ? "border-l-4 border-primary/60"
+                : "border-l-4 border-destructive/60")
+        : "";
+
     return (
         <div className={cn(
-            "rounded-lg border border-border/50 bg-card flex flex-col gap-1",
-            compact ? "p-3" : "p-4 shadow-sm",
+            "rounded-lg bg-card flex flex-col gap-1 card-elevated",
+            compact ? "p-3" : "p-4",
+            borderAccent,
             className
         )}>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{title}</p>
-            <p className={cn("font-bold tabular-nums", compact ? "text-xl" : "text-2xl", isNeg ? "text-red-500" : "text-foreground")}>
+            <p className={cn(
+                "font-bold tabnum",
+                compact ? "text-xl" : "text-2xl",
+                isNeg ? "text-red-500"
+                    : hasHistory && (value ?? 0) >= 0 ? "text-primary"
+                        : "text-foreground"
+            )}>
                 {formatted}
             </p>
             {delta != null && DeltaIcon && (
@@ -52,6 +94,7 @@ export function MetricCard({
                     </span>
                 </div>
             )}
+            {hasHistory && <MiniSparkline values={history!} />}
         </div>
     );
 }

@@ -1,9 +1,9 @@
 import {
     Sidebar, SidebarContent, SidebarHeader, SidebarMenu,
-    SidebarMenuItem, SidebarMenuButton, SidebarFooter,
+    SidebarMenuItem, SidebarMenuButton, SidebarFooter, useSidebar
 } from "@/components/ui/sidebar";
 import {
-    BarChart3, TrendingUp, Package, Target, Receipt, Activity
+    BarChart3, TrendingUp, Package, Target, Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,17 +23,24 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
+    const { state } = useSidebar();
+    const isExpanded = state === "expanded";
+
     return (
         <Sidebar collapsible="icon" className="border-r border-sidebar-border">
             <SidebarHeader className="px-4 py-4 border-b border-sidebar-border">
                 <div className="flex items-center gap-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-                        <Activity size={14} className="text-sidebar-primary-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-bold leading-none text-sidebar-foreground truncate">MIS Dashboard</p>
-                        <p className="text-[10px] text-sidebar-foreground/50 mt-0.5">FY 2025–26 · PriyaFil</p>
-                    </div>
+                    <img
+                        src="/Priyafil-Logo-PNG-Final.png"
+                        alt="PriyaFil Logo"
+                        className={isExpanded ? "h-8 w-auto object-contain shrink-0" : "h-6 w-auto object-contain mx-auto"}
+                    />
+                    {isExpanded && (
+                        <div className="min-w-0 flex flex-col justify-center">
+                            <p className="text-sm font-bold leading-none text-sidebar-foreground truncate tracking-tight">Priya Textile</p>
+                            <p className="text-[10px] uppercase tracking-widest font-semibold text-sidebar-foreground/50 mt-1">Financial Dashboard</p>
+                        </div>
+                    )}
                 </div>
             </SidebarHeader>
 

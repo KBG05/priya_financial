@@ -1,6 +1,6 @@
 /**
  * pivot.ts — Builds ColDef + formatted row arrays for LedgerTable
- * Handles: single, quarterly, mty-all, comparison (month vs YTD) view modes.
+ * Handles: single, quarterly, mty-all view modes.
  */
 import type { ColDef } from "@/components/LedgerTable";
 import type { ViewMode } from "@/types";
@@ -20,7 +20,6 @@ export function buildLedgerData(
 ): { cols: ColDef[]; rows: Record<string, string>[] } {
     const { rupee = true, isSnapshot = false } = opts ?? {};
     const filtered = raw.filter(r => labelItems.includes(r[labelKey]));
-
     const fmtVal = (v: any) => fmt(v ?? null, { rupee });
 
     /** Single month */
@@ -50,7 +49,9 @@ export function buildLedgerData(
             let total = 0;
             months.forEach(m => {
                 const r = filtered.find(x => x[labelKey] === item && x.month === m);
-                const v = isSnapshot ? (months.indexOf(m) === months.length - 1 ? r?.[valueKey] ?? 0 : 0) : (r?.[valueKey] ?? 0);
+                const v = isSnapshot
+                    ? (months.indexOf(m) === months.length - 1 ? r?.[valueKey] ?? 0 : 0)
+                    : (r?.[valueKey] ?? 0);
                 total += v;
                 row[m] = fmtVal(r?.[valueKey]);
             });
@@ -83,33 +84,6 @@ export function buildLedgerData(
         return { cols, rows };
     }
 
-    /** Comparison — Selected Month + YTD (cumulative Apr → curMonth) */
-    if (viewMode === "comparison") {
-        const curMonth = months[months.length - 1];
-        const ytdMonths = raw.length > 0
-            ? MONTH_ORDER.filter(m => {
-                const idx = MONTH_ORDER.indexOf(curMonth as any);
-                return MONTH_ORDER.indexOf(m as any) <= idx && raw.some(x => x.month === m);
-            })
-            : months;
-        const cols: ColDef[] = [
-            { key: labelKey, header: "Item", isLabel: true },
-            { key: "cur_month", header: curMonth, monthGroup: "cur" },
-            { key: "ytd", header: `YTD (Apr–${curMonth})`, isYtd: true },
-        ];
-        const rows = labelItems.map(item => {
-            const curR = filtered.find(x => x[labelKey] === item && x.month === curMonth);
-            const ytdTotal = isSnapshot
-                ? (filtered.find(x => x[labelKey] === item && x.month === curMonth)?.[valueKey] ?? 0)
-                : ytdMonths.reduce((s, m) => {
-                    const r = filtered.find(x => x[labelKey] === item && x.month === m);
-                    return s + (r?.[valueKey] ?? 0);
-                }, 0);
-            return { [labelKey]: item, cur_month: fmtVal(curR?.[valueKey]), ytd: fmtVal(ytdTotal) };
-        });
-        return { cols, rows };
-    }
-
     return { cols: [], rows: [] };
 }
 
@@ -118,15 +92,4 @@ export function getVal(
     raw: Row[], labelKey: string, label: string, month: string, valueKey = "value"
 ): number | null {
     return raw.find(x => x[labelKey] === label && x.month === month)?.[valueKey] ?? null;
-}
-
-/** YTD cumulative sum for one label from Apr up to and including curMonth */
-export function getYtdVal(
-    raw: Row[], labelKey: string, label: string, curMonth: string, valueKey = "value"
-): number {
-    const idx = MONTH_ORDER.indexOf(curMonth as any);
-    return MONTH_ORDER.slice(0, idx + 1).reduce((s, m) => {
-        const r = raw.find(x => x[labelKey] === label && x.month === m);
-        return s + (r?.[valueKey] ?? 0);
-    }, 0);
 }
