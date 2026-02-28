@@ -69,15 +69,15 @@ export function MetricCard({
 
     return (
         <div className={cn(
-            "rounded-lg bg-card flex flex-col gap-1 card-elevated",
+            "rounded-lg bg-card flex flex-col gap-1 card-elevated min-w-0 overflow-hidden",
             compact ? "p-3" : "p-4",
             borderAccent,
             className
         )}>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{title}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate w-full">{title}</p>
             <p className={cn(
-                "font-bold tabnum",
-                compact ? "text-xl" : "text-2xl",
+                "font-bold tabnum truncate w-full",
+                compact ? "text-lg sm:text-xl" : "text-xl sm:text-2xl",
                 isNeg ? "text-red-500"
                     : hasHistory && (value ?? 0) >= 0 ? "text-primary"
                         : "text-foreground"
@@ -85,9 +85,9 @@ export function MetricCard({
                 {formatted}
             </p>
             {delta != null && DeltaIcon && (
-                <div className={cn("flex items-center gap-1 text-[11px] font-medium", getDeltaColor())}>
-                    <DeltaIcon size={11} />
-                    <span>
+                <div className={cn("flex items-center gap-1 text-[11px] font-medium truncate w-full", getDeltaColor())}>
+                    <DeltaIcon size={11} className="shrink-0" />
+                    <span className="truncate">
                         {deltaMode === "neutral"
                             ? `vs prev ${Math.abs(delta).toFixed(1)}%`
                             : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}% vs prev`}

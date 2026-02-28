@@ -31,7 +31,7 @@ export function MtyPage({ months, viewMode, prevMonths }: Props) {
     }, [months.join(","), prevMonths.join(",")]);
 
     if (loading) return (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-28" />)}
         </div>
     );
@@ -98,7 +98,7 @@ export function MtyPage({ months, viewMode, prevMonths }: Props) {
     return (
         <div className="flex flex-col gap-4">
             {/* MTY hero cards with sparklines — sales=default, variable=neutral, profit=default */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <MetricCard title="Total Sales" value={g("TOTAL SALES->")} prevValue={gp("TOTAL SALES->")} history={hist("TOTAL SALES->")} rupee deltaMode="default" />
                 <MetricCard title="Total Variable" value={g("Total Variable") ?? g("Variable & Direct Expense")} prevValue={gp("Total Variable") ?? gp("Variable & Direct Expense")} history={hist("Total Variable")} rupee deltaMode="neutral" />
                 <MetricCard title="Nett Profit" value={g("Nett Profit")} prevValue={gp("Nett Profit")} history={hist("Nett Profit")} rupee deltaMode="default" />

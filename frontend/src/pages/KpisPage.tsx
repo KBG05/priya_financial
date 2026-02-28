@@ -12,7 +12,7 @@ const KPI_GROUPS: KpiGroup[] = [
     { label: "Profitability", items: ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"] },
     { label: "Liquidity", items: ["CCC (cash conversion cycle)", "DIO (Days Inventory Outstanding)", "DSO (Days sales Outstanding)", "DPO (Days Payable Outstanding)", "Current Ratio", "Quick Ratio"] },
     { label: "Leverage", items: ["Debt Equity", "Debt Coverage", "Interest Coverage"] },
-    { label: "Market Metrics", items: ["EPS", "PE Ratio", "EV"] },
+    { label: "Market Metrics", items: ["EPS", "PE Ratio", "EV (Enterprise Value)"] },
 ];
 
 const HIGHLIGHT_KPIS = ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"];
@@ -32,7 +32,7 @@ export function KpisPage({ months, viewMode, prevMonths }: Props) {
 
     if (loading) return (
         <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-4 gap-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28" />)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28" />)}</div>
             <Skeleton className="h-80" />
         </div>
     );
@@ -50,7 +50,7 @@ export function KpisPage({ months, viewMode, prevMonths }: Props) {
     return (
         <div className="flex flex-col gap-4">
             {/* 4 KPI highlight cards with sparkline */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {HIGHLIGHT_KPIS.map(name => {
                     const v = kv(name, cur);
                     const p = kv(name, prev);

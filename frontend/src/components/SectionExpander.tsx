@@ -52,10 +52,14 @@ export function SectionExpander({
                     {heroes && n > 0 && (
                         <>
                             <div
-                                className="grid gap-3"
-                                style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+                                className={cn(
+                                    "grid gap-3",
+                                    n === 1 ? "grid-cols-1" :
+                                        n === 2 ? "grid-cols-1 md:grid-cols-2" :
+                                            "grid-cols-1 md:grid-cols-3"
+                                )}
                             >
-                                {heroes.slice(0, n).map(h => (
+                                {heroes.slice(0, n).map((h, i) => (
                                     <MetricCard
                                         key={h.title}
                                         title={h.title} value={h.value} prevValue={h.prevValue}

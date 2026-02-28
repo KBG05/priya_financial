@@ -31,7 +31,7 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
     }, [months.join(","), prevMonths.join(",")]);
 
     if (loading) return (
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28" />)}
         </div>
     );
@@ -58,7 +58,7 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
     return (
         <div className="flex flex-col gap-4">
             {/* KPI-style hero cards with sparklines */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {HERO_CARDS.map(m => (
                     <MetricCard
                         key={m.title}

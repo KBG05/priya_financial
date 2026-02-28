@@ -30,7 +30,11 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
         ]).then(([r, p]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setLoading(false); });
     }, [months.join(","), prevMonths.join(",")]);
 
-    if (loading) return <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14" />)}</div>;
+    if (loading) return (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+    );
 
     const curData = data.filter(r => r.month === cur);
     const prevCurData = prevData.filter(r => r.month === prev);
@@ -92,7 +96,7 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
     return (
         <div className="flex flex-col gap-4">
             {/* Summary */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <MetricCard title="Total Consumption Value" value={totVal} prevValue={prevTotVal} rupee deltaMode="neutral" />
                 <MetricCard title="Total Quantity" value={totQty} prevValue={prevTotQty} deltaMode="neutral" />
             </div>
