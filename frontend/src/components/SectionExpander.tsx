@@ -15,6 +15,8 @@ export interface SectionHero {
     deltaMode?: "default" | "neutral" | "inverse";
 }
 
+export type HeroMetricProps = SectionHero;
+
 interface SectionExpanderProps {
     title: string;
     heroes?: SectionHero[];
@@ -22,10 +24,12 @@ interface SectionExpanderProps {
     rows: Record<string, string>[];
     defaultOpen?: boolean;
     className?: string;
+    /** When true, renders without the outer card style (for use inside DetailedBreakdown) */
+    nested?: boolean;
 }
 
 export function SectionExpander({
-    title, heroes, cols, rows, defaultOpen = false, className
+    title, heroes, cols, rows, defaultOpen = false, className, nested = false
 }: SectionExpanderProps) {
     const [open, setOpen] = useState(defaultOpen);
     const n = Math.min(heroes?.length ?? 0, 3);
@@ -34,7 +38,12 @@ export function SectionExpander({
         <Collapsible
             open={open}
             onOpenChange={setOpen}
-            className={cn("rounded-xl bg-card card-elevated overflow-hidden", className)}
+            className={cn(
+                nested
+                    ? "overflow-hidden min-w-0 bg-transparent"
+                    : "rounded-xl bg-card card-elevated overflow-hidden min-w-0",
+                className
+            )}
         >
             <CollapsibleTrigger className={cn(
                 "flex w-full items-center justify-between px-5 py-3.5 select-none cursor-pointer",
@@ -48,7 +57,8 @@ export function SectionExpander({
             </CollapsibleTrigger>
 
             <CollapsibleContent className="collapsible-content">
-                <div className="px-4 pb-4 pt-3 flex flex-col gap-3">
+                {/* width:100% + overflow:hidden here is the hard stop — prevents any child from growing the card */}
+                <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }} className="px-4 pb-4 pt-3 flex flex-col gap-3">
                     {heroes && n > 0 && (
                         <>
                             <div
@@ -71,7 +81,10 @@ export function SectionExpander({
                             <div className="section-divider" />
                         </>
                     )}
-                    <LedgerTable cols={cols} rows={rows} />
+                    {/* The table scrolls within this constrained div */}
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                        <LedgerTable cols={cols} rows={rows} />
+                    </div>
                 </div>
             </CollapsibleContent>
         </Collapsible>

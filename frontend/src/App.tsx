@@ -79,7 +79,7 @@ function Dashboard() {
         </header>
 
         {/* Main content: filter zone + page zone with clear separation */}
-        <main className="p-5 flex flex-col gap-0">
+        <main className="p-5 flex flex-col gap-0 overflow-x-hidden min-w-0">
           {/* Group 1: Filters */}
           <FilterBar
             availableMonths={availableMonths}
@@ -94,7 +94,7 @@ function Dashboard() {
           <div className="my-4 border-t border-border/40" />
 
           {/* Group 2: Page content (hero cards + breakdowns) */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
             {activeTab === "pal1" && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} />}
             {activeTab === "mty" && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
             {activeTab === "consumption" && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}

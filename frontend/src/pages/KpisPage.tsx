@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MetricCard } from "@/components/MetricCard";
 import { GroupedKpiTable, type KpiGroup } from "@/components/GroupedKpiTable";
+import { TrendChart } from "@/components/TrendChart";
+import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
 import { api } from "@/api";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
@@ -20,6 +21,7 @@ const HIGHLIGHT_KPIS = ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"
 export function KpisPage({ months, viewMode, prevMonths }: Props) {
     const [allData, setAllData] = useState<any[]>([]); // all months for sparklines  
     const [loading, setLoading] = useState(true);
+    const [trendOption, setTrendOption] = useState("Revenue growth");
     const cur = months[months.length - 1];
     const prev = prevMonths[prevMonths.length - 1];
 
@@ -31,7 +33,7 @@ export function KpisPage({ months, viewMode, prevMonths }: Props) {
     }, [months.join(","), prevMonths.join(",")]);
 
     if (loading) return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 min-w-0 w-full">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28" />)}</div>
             <Skeleton className="h-80" />
         </div>
@@ -47,26 +49,37 @@ export function KpisPage({ months, viewMode, prevMonths }: Props) {
             .map(m => kv(name, m))
             .filter((v): v is number => v != null);
 
+    const trendOptions = KPI_GROUPS.flatMap(g => g.items);
+    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => ({
+        month: m,
+        value: kv(trendOption, m) ?? 0
+    }));
+
     return (
-        <div className="flex flex-col gap-4">
-            {/* 4 KPI highlight cards with sparkline */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {HIGHLIGHT_KPIS.map(name => {
-                    const v = kv(name, cur);
-                    const p = kv(name, prev);
-                    const history = sparkSeries(name);
-                    return (
-                        <MetricCard
-                            key={name}
-                            title={name}
-                            value={v}
-                            prevValue={p}
-                            pct
-                            history={history}
-                            deltaMode="default"
-                        />
-                    );
-                })}
+        <div className="flex flex-col gap-4 min-w-0 w-full">
+            <div className="flex flex-col xl:flex-row gap-4">
+                <div className="flex-1 min-w-0">
+                    <TrendChart
+                        title={`${trendOption} Trend`}
+                        data={trendData}
+                        dataKey="value"
+                        options={trendOptions}
+                        selectedOption={trendOption}
+                        onOptionChange={setTrendOption}
+                        pct={trendOption !== "EPS" && trendOption !== "EV (Enterprise Value)" && trendOption !== "PE Ratio" && !trendOption.includes("Days")}
+                    />
+                </div>
+                {/* 4 KPI highlight cards with sparkline */}
+                <HeroMetricsPanel
+                    metrics={HIGHLIGHT_KPIS.map(name => ({
+                        title: name,
+                        value: kv(name, cur),
+                        prevValue: kv(name, prev),
+                        history: sparkSeries(name),
+                        pct: true,
+                        deltaMode: "default"
+                    }))}
+                />
             </div>
 
             {/* Grouped collapsible KPI table */}

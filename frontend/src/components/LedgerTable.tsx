@@ -21,7 +21,10 @@ interface LedgerTableProps {
 
 export function LedgerTable({ cols, rows, className }: LedgerTableProps) {
     return (
-        <div className={cn("rounded-xl overflow-x-auto slim-scrollbar card-elevated bg-card max-w-full", className)}>
+        <div
+            style={{ display: 'block', width: '100%', maxWidth: '100%', overflowX: 'auto' }}
+            className={cn("rounded-xl slim-scrollbar card-elevated bg-card", className)}
+        >
             <table className="w-max min-w-full text-sm">
                 {/* Sticky header */}
                 <thead className="sticky top-0 z-10">

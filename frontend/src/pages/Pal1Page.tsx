@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MetricCard } from "@/components/MetricCard";
-import { SectionExpander } from "@/components/SectionExpander";
+import { TrendChart } from "@/components/TrendChart";
+import { DetailedBreakdown } from "@/components/DetailedBreakdown";
+import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
 import { api } from "@/api";
 import { buildLedgerData, getVal } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
@@ -14,6 +15,7 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
     const [prevData, setPrevData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);   // all months for sparklines
     const [loading, setLoading] = useState(true);
+    const [trendOption, setTrendOption] = useState("Gross Profit");
     const cur = months[months.length - 1];
     const prev = prevMonths[prevMonths.length - 1];
 
@@ -55,33 +57,45 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
         { title: "Total Expenses", lineItem: "Total Expns", deltaMode: "inverse" as const },
     ];
 
+    const trendOptions = ["Profit (A)", "NETT PROFIT", "Gross Profit"];
+    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => ({
+        month: m,
+        value: getVal(allData, "line_item", trendOption, m) ?? 0
+    }));
+
     return (
-        <div className="flex flex-col gap-4">
-            {/* KPI-style hero cards with sparklines */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                {HERO_CARDS.map(m => (
-                    <MetricCard
-                        key={m.title}
-                        title={m.title}
-                        value={g(m.lineItem)}
-                        prevValue={gp(m.lineItem)}
-                        history={hist(m.lineItem)}
+        <div className="flex flex-col gap-4 min-w-0 w-full">
+            {/* Top Section: Chart on Left, Stacked Hero Cards on Right */}
+            <div className="flex flex-col xl:flex-row gap-4">
+                <div className="flex-1 min-w-0">
+                    <TrendChart
+                        title={`${trendOption} Trend`}
+                        data={trendData}
+                        dataKey="value"
+                        options={trendOptions}
+                        selectedOption={trendOption}
+                        onOptionChange={setTrendOption}
                         rupee
-                        deltaMode={m.deltaMode}
                     />
-                ))}
+                </div>
+                <HeroMetricsPanel
+                    metrics={HERO_CARDS.map(m => ({
+                        title: m.title,
+                        value: g(m.lineItem),
+                        prevValue: gp(m.lineItem),
+                        history: hist(m.lineItem),
+                        rupee: true,
+                        deltaMode: m.deltaMode as any
+                    }))}
+                />
             </div>
 
-            {/* Sections with sparklines on inner hero cards too */}
-            {([
+            <DetailedBreakdown sections={([
                 {
                     title: "💰 Revenue",
                     items: ["Sales", "Waste", "Othr Inc"],
                     heroes: [
-                        {
-                            title: "Sales", value: g("Sales"), prevValue: gp("Sales"),
-                            history: hist("Sales"), rupee: true as const, deltaMode: "default" as const
-                        },
+                        { title: "Sales", value: g("Sales"), prevValue: gp("Sales"), history: hist("Sales"), rupee: true as const, deltaMode: "default" as const },
                     ],
                 },
                 {
@@ -97,20 +111,14 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
                     title: "🔧 Direct Expenses",
                     items: ["Consumption", "Direct Expns", "In House Fabrn", "Fabrication", "Direct Cost"],
                     heroes: [
-                        {
-                            title: "Direct Cost", value: g("Direct Cost"), prevValue: gp("Direct Cost"), history: hist("Direct Cost"),
-                            rupee: true as const, deltaMode: "inverse" as const
-                        },
+                        { title: "Direct Cost", value: g("Direct Cost"), prevValue: gp("Direct Cost"), history: hist("Direct Cost"), rupee: true as const, deltaMode: "inverse" as const },
                     ],
                 },
                 {
                     title: "📋 Overheads",
                     items: ["Deprecition", "Indirect Expns", "Total Expns"],
                     heroes: [
-                        {
-                            title: "Total Overheads", value: g("Total Expns"), prevValue: gp("Total Expns"), history: hist("Total Expns"),
-                            rupee: true as const, deltaMode: "inverse" as const
-                        },
+                        { title: "Total Overheads", value: g("Total Expns"), prevValue: gp("Total Expns"), history: hist("Total Expns"), rupee: true as const, deltaMode: "inverse" as const },
                     ],
                 },
                 {
@@ -124,8 +132,8 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
                 },
             ] as any[]).map(sec => {
                 const { cols, rows } = s(sec.items, sec.snap);
-                return <SectionExpander key={sec.title} title={sec.title} heroes={sec.heroes} cols={cols} rows={rows} />;
-            })}
+                return { title: sec.title, cols, rows, heroes: sec.heroes };
+            })} />
         </div>
     );
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MetricCard } from "@/components/MetricCard";
-import { SectionExpander } from "@/components/SectionExpander";
+import { TrendChart } from "@/components/TrendChart";
+import { DetailedBreakdown } from "@/components/DetailedBreakdown";
+import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
 import { api } from "@/api";
 import { buildLedgerData, getVal } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
@@ -14,6 +15,7 @@ export function MtyPage({ months, viewMode, prevMonths }: Props) {
     const [prevData, setPrevData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [trendOption, setTrendOption] = useState("Nett Profit");
     const cur = months[months.length - 1];
     const prev = prevMonths[prevMonths.length - 1];
 
@@ -95,19 +97,40 @@ export function MtyPage({ months, viewMode, prevMonths }: Props) {
         },
     ];
 
+    const trendOptions = ["Nett Profit", "Gross Profit", "EBITDA"];
+    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => ({
+        month: m,
+        value: getVal(allData, "line_item", trendOption, m) ?? 0
+    }));
+
     return (
-        <div className="flex flex-col gap-4">
-            {/* MTY hero cards with sparklines — sales=default, variable=neutral, profit=default */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <MetricCard title="Total Sales" value={g("TOTAL SALES->")} prevValue={gp("TOTAL SALES->")} history={hist("TOTAL SALES->")} rupee deltaMode="default" />
-                <MetricCard title="Total Variable" value={g("Total Variable") ?? g("Variable & Direct Expense")} prevValue={gp("Total Variable") ?? gp("Variable & Direct Expense")} history={hist("Total Variable")} rupee deltaMode="neutral" />
-                <MetricCard title="Nett Profit" value={g("Nett Profit")} prevValue={gp("Nett Profit")} history={hist("Nett Profit")} rupee deltaMode="default" />
+        <div className="flex flex-col gap-4 min-w-0 w-full">
+            {/* Top Section: Chart on Left, Stacked Hero Cards on Right */}
+            <div className="flex flex-col xl:flex-row gap-4">
+                <div className="flex-1 min-w-0">
+                    <TrendChart
+                        title={`${trendOption} Trend`}
+                        data={trendData}
+                        dataKey="value"
+                        options={trendOptions}
+                        selectedOption={trendOption}
+                        onOptionChange={setTrendOption}
+                        rupee
+                    />
+                </div>
+                <HeroMetricsPanel
+                    metrics={[
+                        { title: "Total Sales", value: g("TOTAL SALES->"), prevValue: gp("TOTAL SALES->"), history: hist("TOTAL SALES->"), rupee: true, deltaMode: "default" },
+                        { title: "Total Variable", value: g("Total Variable") ?? g("Variable & Direct Expense"), prevValue: gp("Total Variable") ?? gp("Variable & Direct Expense"), history: hist("Total Variable"), rupee: true, deltaMode: "neutral" },
+                        { title: "Nett Profit", value: g("Nett Profit"), prevValue: gp("Nett Profit"), history: hist("Nett Profit"), rupee: true, deltaMode: "default" },
+                    ]}
+                />
             </div>
 
-            {SECTIONS.map(sec => {
+            <DetailedBreakdown sections={SECTIONS.map(sec => {
                 const { cols, rows } = s(sec.items, sec.snap);
-                return <SectionExpander key={sec.title} title={sec.title} heroes={sec.heroes} cols={cols} rows={rows} />;
-            })}
+                return { title: sec.title, cols, rows, heroes: sec.heroes };
+            })} />
         </div>
     );
 }
