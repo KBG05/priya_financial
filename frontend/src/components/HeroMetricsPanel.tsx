@@ -71,7 +71,7 @@ export function HeroMetricsPanel({ metrics, height = 200 }: Props) {
     const [view, setView] = useState<ViewMode>("cards");
 
     return (
-        <div className="flex flex-col gap-2 w-full xl:w-[30%] shrink-0">
+        <div className="flex flex-col gap-2 w-full xl:w-[30%] shrink-0 self-stretch">
             {/* Toggle */}
             <div className="flex items-center gap-1 p-1 bg-muted/20 rounded-lg w-fit border border-border/30 self-start">
                 <button
@@ -116,15 +116,14 @@ export function HeroMetricsPanel({ metrics, height = 200 }: Props) {
             ) : (
                 /* ── List View ── */
                 <div
-                    className="rounded-xl bg-card card-elevated overflow-hidden flex flex-col"
-                    style={{ height, overflowY: "auto" }}
+                    className="rounded-xl bg-card card-elevated overflow-hidden flex flex-col flex-1 min-h-0"
                 >
                     {/* Header */}
                     <div className="px-4 py-3 border-b border-border/30 shrink-0">
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Key Metrics</p>
                     </div>
                     {/* Rows */}
-                    <div className="flex flex-col divide-y divide-border/20 overflow-y-auto">
+                    <div className="flex flex-col divide-y divide-border/20 flex-1 min-h-0 overflow-y-auto">
                         {metrics.map(m => {
                             const Icon = getIcon(m.title);
                             const isPositive =

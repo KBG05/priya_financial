@@ -1,7 +1,4 @@
 import { useEffect, useState } from "react";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import { AppSidebar, type TabId } from "@/components/AppSidebar";
 import { FilterBar } from "@/components/FilterBar";
 import { TopBarRight } from "@/components/TopBarRight";
 import { ThemeProvider } from "@/hooks/useTheme";
@@ -12,14 +9,20 @@ import { KpisPage } from "@/pages/KpisPage";
 import { DirectExpensesPage } from "@/pages/DirectExpensesPage";
 import { api } from "@/api";
 import type { ViewMode } from "@/types";
+import {
+  BarChart3, TrendingUp, Package, Target, Receipt
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const PAGE_TITLES: Record<TabId, string> = {
-  pal1: "PAL-1 (P&L)",
-  mty: "MTY",
-  consumption: "Consumption",
-  kpis: "KPI Scorecard",
-  direct_expenses: "Direct Expenses",
-};
+export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses";
+
+const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "pal1",             label: "PAL-1 (P&L)",    icon: BarChart3 },
+  { id: "mty",              label: "MTY",             icon: TrendingUp },
+  { id: "consumption",      label: "Consumption",     icon: Package },
+  { id: "kpis",             label: "KPI Scorecard",   icon: Target },
+  { id: "direct_expenses",  label: "Direct Expenses", icon: Receipt },
+];
 
 function Dashboard() {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
@@ -47,14 +50,6 @@ function Dashboard() {
     }
   }, [months, viewMode, availableMonths]);
 
-  const handleTabChange = (tab: TabId) => {
-    setActiveTab(tab);
-    if (tab !== "mty" && viewMode === "mty-all") {
-      setViewMode("single");
-      setMonths([availableMonths[availableMonths.length - 1]]);
-    }
-  };
-
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
@@ -65,45 +60,73 @@ function Dashboard() {
   );
 
   return (
-    <SidebarProvider>
-      <AppSidebar activeTab={activeTab} onTabChange={handleTabChange} />
-      <SidebarInset>
-        {/* Sticky top bar — title, sidebar trigger, theme + user avatar only */}
-        <header className="flex h-13 items-center gap-2.5 border-b border-border px-4 sticky top-0 z-10 bg-background/90 backdrop-blur-sm">
-          <SidebarTrigger className="-ml-1 h-8 w-8" />
-          <Separator orientation="vertical" className="h-4 mx-0.5" />
-          <h1 className="text-sm font-semibold text-foreground">{PAGE_TITLES[activeTab]}</h1>
-          <div className="ml-auto">
-            <TopBarRight />
+    <div className="flex flex-col min-h-screen bg-background">
+      {/* Top navigation bar */}
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
+        {/* Row 1: Logo + nav tabs + right controls */}
+        <div className="flex items-center h-13 px-4 gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-7 w-auto object-contain" />
+            <div className="hidden sm:flex flex-col justify-center">
+              <p className="text-xs font-bold leading-none text-foreground tracking-tight">Priya Textile</p>
+              <p className="text-[9px] uppercase tracking-widest font-semibold text-muted-foreground mt-0.5">Financial Dashboard</p>
+            </div>
           </div>
-        </header>
 
-        {/* Main content: filter zone + page zone with clear separation */}
-        <main className="p-5 flex flex-col gap-0 overflow-x-hidden min-w-0">
-          {/* Group 1: Filters */}
-          <FilterBar
-            availableMonths={availableMonths}
-            viewMode={viewMode}
-            selectedMonths={months}
-            isMtyTab={activeTab === "mty"}
-            onViewModeChange={setViewMode}
-            onMonthsChange={setMonths}
-          />
+          {/* Divider */}
+          <div className="h-6 w-px bg-border/60 shrink-0" />
 
-          {/* Divider between filter zone and data zone */}
-          <div className="my-4 border-t border-border/40" />
+          {/* Nav tabs */}
+          <nav className="flex items-center gap-0.5 flex-1 overflow-x-auto no-scrollbar">
+            {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+              const isActive = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all duration-150 whitespace-nowrap shrink-0",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  )}
+                >
+                  <Icon size={14} className="shrink-0" />
+                  <span className="hidden md:inline">{label}</span>
+                </button>
+              );
+            })}
+          </nav>
 
-          {/* Group 2: Page content (hero cards + breakdowns) */}
-          <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
-            {activeTab === "pal1" && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-            {activeTab === "mty" && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-            {activeTab === "consumption" && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-            {activeTab === "kpis" && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-            {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          </div>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+          {/* Right controls */}
+          <TopBarRight />
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="p-5 flex flex-col gap-0 overflow-x-hidden min-w-0">
+        {/* Filters */}
+        <FilterBar
+          availableMonths={availableMonths}
+          viewMode={viewMode}
+          selectedMonths={months}
+          onViewModeChange={setViewMode}
+          onMonthsChange={setMonths}
+        />
+
+        <div className="my-4 border-t border-border/40" />
+
+        {/* Page content */}
+        <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
+          {activeTab === "pal1"            && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "mty"             && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+        </div>
+      </main>
+    </div>
   );
 }
 

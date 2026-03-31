@@ -20,13 +20,12 @@ interface FilterBarProps {
     availableMonths: string[];
     viewMode: ViewMode;
     selectedMonths: string[];
-    isMtyTab: boolean;
     onViewModeChange: (vm: ViewMode) => void;
     onMonthsChange: (months: string[]) => void;
 }
 
 export function FilterBar({
-    availableMonths, viewMode, selectedMonths, isMtyTab,
+    availableMonths, viewMode, selectedMonths,
     onViewModeChange, onMonthsChange,
 }: FilterBarProps) {
     const curMonth = selectedMonths[selectedMonths.length - 1] ?? availableMonths[availableMonths.length - 1];
@@ -78,7 +77,7 @@ export function FilterBar({
                     <SelectContent {...scProps}>
                         <SelectItem value="single">Single Month</SelectItem>
                         <SelectItem value="quarterly">Quarterly</SelectItem>
-                        {isMtyTab && <SelectItem value="mty-all">MTY All Months</SelectItem>}
+                        <SelectItem value="mty-all">All Months</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
