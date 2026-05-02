@@ -16,4 +16,5 @@ export const api = {
     consumption: (months: string[]) => get<{ data: any[] }>("/consumption", { months: months.join(",") }),
     kpis: (months: string[]) => get<{ data: any[] }>("/kpis", { months: months.join(",") }),
     directExpenses: (months: string[]) => get<{ data: any[] }>("/direct_expenses", { months: months.join(",") }),
+    contribution: (months: string[]) => get<{ data: any[] }>("/contribution", { months: months.join(",") }),
 };

@@ -7,14 +7,15 @@ import { MtyPage } from "@/pages/MtyPage";
 import { ConsumptionPage } from "@/pages/ConsumptionPage";
 import { KpisPage } from "@/pages/KpisPage";
 import { DirectExpensesPage } from "@/pages/DirectExpensesPage";
+import { ContributionPage } from "@/pages/ContributionPage";
 import { api } from "@/api";
 import type { ViewMode } from "@/types";
 import {
-  BarChart3, TrendingUp, Package, Target, Receipt
+  BarChart3, TrendingUp, Package, Target, Receipt, DollarSign
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses";
+export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses" | "contribution";
 
 const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "pal1",             label: "PAL-1 (P&L)",    icon: BarChart3 },
@@ -22,6 +23,7 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "consumption",      label: "Consumption",     icon: Package },
   { id: "kpis",             label: "KPI Scorecard",   icon: Target },
   { id: "direct_expenses",  label: "Direct Expenses", icon: Receipt },
+  { id: "contribution",     label: "Contribution",    icon: DollarSign },
 ];
 
 function Dashboard() {
@@ -124,6 +126,7 @@ function Dashboard() {
           {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
           {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
           {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "contribution"    && <ContributionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
         </div>
       </main>
     </div>

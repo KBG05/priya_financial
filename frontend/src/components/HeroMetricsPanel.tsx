@@ -16,8 +16,6 @@ export interface MetricItem {
 
 interface Props {
     metrics: MetricItem[];
-    /** Should match the chart container height so the panel aligns */
-    height?: number;
 }
 
 type ViewMode = "cards" | "list";
@@ -51,7 +49,7 @@ function sparkPath(history: number[], w = 72, h = 24): string {
 
 /** Inline sparkline SVG */
 function Sparkline({ history, positive }: { history: number[]; positive: boolean }) {
-    if (!history || history.length < 2) return <span className="w-[72px]" />;
+    if (!history || history.length < 2) return <span className="w-18" />;
     const pts = sparkPath(history);
     return (
         <svg width={72} height={24} viewBox={`0 0 72 24`} className="shrink-0">
@@ -67,7 +65,7 @@ function Sparkline({ history, positive }: { history: number[]; positive: boolean
     );
 }
 
-export function HeroMetricsPanel({ metrics, height = 200 }: Props) {
+export function HeroMetricsPanel({ metrics }: Props) {
     const [view, setView] = useState<ViewMode>("cards");
 
     return (

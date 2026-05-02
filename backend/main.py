@@ -130,3 +130,20 @@ def get_direct_expenses(months: str = Query(...)):
             params,
         )
     }
+
+
+@app.get("/contribution")
+def get_contribution(months: str = Query(...)):
+    ph, params = _months(months)
+    return {
+        "data": query(
+            f"""SELECT month, product_id, product_name,
+                qty, revenue, selling_price_per_kg,
+                rm_price, filament_conversion, fabrication_per_kg, mts_per_kg,
+                contribution_per_kg, sales_mtrs, contribution_value
+            FROM contribution_{FY}
+            WHERE month IN ({ph})
+            ORDER BY contribution_per_kg DESC""",
+            params,
+        )
+    }
