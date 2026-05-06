@@ -40,7 +40,7 @@ type ProfitFilter = "all" | "positive" | "negative";
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
 const TOP_N = 20;
-const BAR_COLOR_POS = "hsl(var(--chart-1))";
+const BAR_COLOR_POS = "hsl(var(--primary))";
 const BAR_COLOR_NEG = "hsl(var(--destructive))";
 const LINE_COLOR = "#ff8c42";
 

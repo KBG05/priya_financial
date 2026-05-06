@@ -33,16 +33,19 @@ export function DirectExpensesPage({ months, viewMode, fy }: Props) {
     if (loading) return <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12" />)}</div>;
 
     const categories = [...new Set(data.map((r: any) => r.category))].sort();
+    const lineItems = [...new Set(data.map((r: any) => r.line_item))].sort();
 
-    const trendOptions = ["Variable & direct expense", "Fixed Cost", "Total"];
+    const trendOptions = ["Total", ...categories, ...lineItems];
 
     const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
         const monthRows = allData.filter(r => r.month === m);
         let val = 0;
         if (trendOption === "Total") {
             val = monthRows.reduce((sum, r) => sum + (r.value ?? 0), 0);
-        } else {
+        } else if (categories.includes(trendOption)) {
             val = monthRows.filter(r => r.category === trendOption).reduce((sum, r) => sum + (r.value ?? 0), 0);
+        } else {
+            val = monthRows.filter(r => r.line_item === trendOption).reduce((sum, r) => sum + (r.value ?? 0), 0);
         }
         return { month: m, value: val };
     });
