@@ -1,0 +1,146 @@
+"""
+Ingest Indirect Expenses data from Sales_Pur_Exps Excel file.
+
+Source: InputTallyTarka/Sales_Pur_Exps-Nov.25.xlsx -> Indirect Expns sheet
+
+Structure:
+- Row 2: Headers (Particulars, Apr, May, ... Mar)
+- Rows 3-40:  Administrative expenses
+- Row 41:     Financial Expenses (total row - SKIP)
+- Rows 42-51: Financial expenses (detail items)
+- Row 52:     Selling Expenses (total row - SKIP)
+- Rows 53-60: Selling expenses (detail items)
+
+Total/group-header rows are excluded; we only ingest individual line items.
+"""
+
+from pathlib import Path
+from typing import Optional
+import openpyxl
+
+from .db import MONTHS
+
+
+def create_indirect_expenses_table(conn, fy_suffix: str) -> None:
+    """Create indirect expenses table for a specific fiscal year."""
+    table_name = f"indirect_expenses_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            month TEXT NOT NULL,
+            expense_group TEXT NOT NULL,
+            expense_name TEXT NOT NULL,
+            value REAL,
+            UNIQUE(month, expense_name)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == '' or val == ' ':
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# Rows that are group totals - should be skipped
+TOTAL_ROWS = {
+    'Indirect Expenses',
+    'Administrative Expenses',  # Row 3 - sum of admin items
+    'Financial Expenses',
+    'Selling Expenses',
+}
+
+# Row ranges for each expense group
+# (start_row, end_row, group_name)
+EXPENSE_GROUPS = [
+    (4, 40, 'ADMINISTRATIVE'),  # Start from row 4, skip row 3 total
+    (42, 51, 'FINANCIAL'),
+    (53, 64, 'SELLING'),  # Extended to include Transportation, Travelling, Discount rows
+]
+
+
+def ingest_indirect_expenses(conn, filepath: Path, fy_suffix: str) -> int:
+    """
+    Ingest indirect expenses data from Excel file.
+
+    Args:
+        conn: Database connection
+        filepath: Path to Sales_Pur_Exps Excel file
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+
+    Returns:
+        Number of records inserted
+    """
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    print(f"\n[INDIRECT EXPENSES] Reading from: {filepath.name}")
+
+    create_indirect_expenses_table(conn, fy_suffix)
+    table_name = f"indirect_expenses_{fy_suffix}"
+    conn.execute(f"DELETE FROM {table_name}")
+
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb['Indirect Expns']
+
+    # Month columns: B=Apr(col 1), C=May(col 2), ... M=Mar(col 12)
+    month_cols = {
+        1: 'Apr', 2: 'May', 3: 'Jun', 4: 'Jul',
+        5: 'Aug', 6: 'Sep', 7: 'Oct', 8: 'Nov',
+        9: 'Dec', 10: 'Jan', 11: 'Feb', 12: 'Mar'
+    }
+
+    records = []
+
+    for start_row, end_row, group_name in EXPENSE_GROUPS:
+        for row_idx in range(start_row, end_row + 1):
+            row = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+
+            expense_name = str(row[0]).strip() if row[0] else None
+            if not expense_name or expense_name == ' ':
+                continue
+
+            # Skip total/header rows
+            if expense_name in TOTAL_ROWS:
+                continue
+
+            for col_idx, month in month_cols.items():
+                value = safe_float(row[col_idx])
+                if value is not None:
+                    records.append({
+                        'month': month,
+                        'expense_group': group_name,
+                        'expense_name': expense_name,
+                        'value': value,
+                    })
+
+    wb.close()
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name}
+            (month, expense_group, expense_name, value)
+            VALUES (%s, %s, %s, %s)
+        """, (rec['month'], rec['expense_group'], rec['expense_name'], rec['value']))
+
+    conn.commit()
+
+    total = len(records)
+    print(f"  ✓ Inserted {total} indirect expense records into {table_name}")
+
+    # Summary by group
+    cursor = conn.execute(f"""
+        SELECT expense_group, COUNT(DISTINCT expense_name) as categories, COUNT(*) as records
+        FROM {table_name} GROUP BY expense_group
+    """)
+    for row in cursor:
+        print(f"    {row[0]}: {row[1]} categories, {row[2]} records")
+
+    return total

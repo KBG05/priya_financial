@@ -7,7 +7,7 @@ import { api } from "@/api";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
 
-interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
+interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
 const KPI_GROUPS: KpiGroup[] = [
     { label: "Profitability", items: ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"] },
@@ -18,7 +18,7 @@ const KPI_GROUPS: KpiGroup[] = [
 
 const HIGHLIGHT_KPIS = ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"];
 
-export function KpisPage({ months, viewMode, prevMonths }: Props) {
+export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
     const [allData, setAllData] = useState<any[]>([]); // all months for sparklines  
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Revenue growth");
@@ -29,7 +29,7 @@ export function KpisPage({ months, viewMode, prevMonths }: Props) {
         setLoading(true);
         const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         // fetch all months for table + sparklines in one call
-        api.kpis(allMonths).then(r => { setAllData(r.data); setLoading(false); });
+        api.kpis(allMonths, fy).then(r => { setAllData(r.data); setLoading(false); });
     }, [months.join(","), prevMonths.join(",")]);
 
     if (loading) return (

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Cell,
 } from "recharts";
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, X } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api } from "@/api";
 import { fmt } from "@/lib/format";
 import type { ViewMode } from "@/types";
@@ -33,11 +37,12 @@ type SortKey = keyof ContribRow;
 type SortDir = "asc" | "desc";
 type ProfitFilter = "all" | "positive" | "negative";
 
-interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
+interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
 const TOP_N = 20;
-const POSITIVE_COLOR = "hsl(var(--primary))";
-const NEGATIVE_COLOR = "hsl(var(--destructive))";
+const BAR_COLOR_POS = "hsl(var(--chart-1))";
+const BAR_COLOR_NEG = "hsl(var(--destructive))";
+const LINE_COLOR = "#ff8c42";
 
 const COLUMNS: { key: SortKey; label: string; right?: boolean; rupee?: boolean; highlight?: boolean }[] = [
     { key: "product_name",        label: "Product Name" },
@@ -59,11 +64,12 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
         : <ArrowDown size={11} className="ml-1 text-primary inline" />;
 }
 
-export function ContributionPage({ months, viewMode, prevMonths }: Props) {
+export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<ContribRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
+    const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
     // Single state object so key+dir always update atomically — fixes the "sort once" bug
     const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "contribution_per_kg", dir: "desc" });
     const [page, setPage] = useState(1);
@@ -76,44 +82,65 @@ export function ContributionPage({ months, viewMode, prevMonths }: Props) {
         const allMonths = viewMode === "single"
             ? months
             : MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
-        api.contribution(allMonths)
+        api.contribution(allMonths, fy)
             .then(r => { setData(r.data as ContribRow[]); setLoading(false); })
             .catch(() => setLoading(false));
     }, [months.join(","), prevMonths.join(","), viewMode]);
 
     const curRows = useMemo(() => data.filter(r => r.month === cur), [data, cur]);
+    // For hero totals: sum across all selected months in multi-month views
+    const heroRows = useMemo(
+        () => viewMode === "single" ? curRows : data.filter(r => months.includes(r.month)),
+        [data, curRows, months, viewMode]
+    );
+    const productOptions = useMemo(
+        () => [...new Set(curRows.map(r => r.product_name))].sort(),
+        [curRows]
+    );
 
-    // Aggregate totals (always over full curRows, not filtered)
-    const totalContribValue = curRows.reduce((s, r) => s + (r.contribution_value ?? 0), 0);
-    const totalRevenue      = curRows.reduce((s, r) => s + (r.revenue ?? 0), 0);
-    const totalQty          = curRows.reduce((s, r) => s + (r.qty ?? 0), 0);
+    // Aggregate totals (always over full heroRows, not filtered)
+    const totalContribValue = heroRows.reduce((s, r) => s + (r.contribution_value ?? 0), 0);
+    const totalRevenue      = heroRows.reduce((s, r) => s + (r.revenue ?? 0), 0);
+    const totalQty          = heroRows.reduce((s, r) => s + (r.qty ?? 0), 0);
     const avgContribPerKg   = totalQty > 0 ? totalContribValue / totalQty : 0;
     const positiveCount     = curRows.filter(r => r.contribution_per_kg >= 0).length;
     const negativeCount     = curRows.filter(r => r.contribution_per_kg < 0).length;
     const constants         = curRows[0];
 
-    // Chart: top N by contribution_value from full set
-    const chartRows = useMemo(() =>
-        [...curRows].sort((a, b) => b.contribution_value - a.contribution_value).slice(0, TOP_N),
-        [curRows]
-    );
-
-    // Filtered + sorted table rows (all, for footer totals)
-    const tableRows = useMemo(() => {
+    const filteredRows = useMemo(() => {
         let rows = curRows;
         if (search.trim()) {
             const q = search.trim().toLowerCase();
             rows = rows.filter(r => r.product_name.toLowerCase().includes(q));
         }
+        if (selectedProducts.length) rows = rows.filter(r => selectedProducts.includes(r.product_name));
         if (profitFilter === "positive") rows = rows.filter(r => r.contribution_per_kg >= 0);
         if (profitFilter === "negative") rows = rows.filter(r => r.contribution_per_kg < 0);
-        return [...rows].sort((a, b) => {
+        return rows;
+    }, [curRows, search, selectedProducts, profitFilter]);
+
+    // Chart: top N by contribution_value from filtered set
+    const chartRows = useMemo(() =>
+        [...filteredRows]
+            .sort((a, b) => b.contribution_value - a.contribution_value)
+            .slice(0, TOP_N)
+            .map(r => ({
+                name: r.product_name,
+                contribution_value: r.contribution_value,
+                contribution_per_kg: r.contribution_per_kg,
+            })),
+        [filteredRows]
+    );
+
+    // Filtered + sorted table rows (all, for footer totals)
+    const tableRows = useMemo(() => {
+        return [...filteredRows].sort((a, b) => {
             const av = a[sort.key] as number | string;
             const bv = b[sort.key] as number | string;
             const cmp = typeof av === "string" ? av.localeCompare(bv as string) : (av as number) - (bv as number);
             return sort.dir === "asc" ? cmp : -cmp;
         });
-    }, [curRows, search, profitFilter, sort]);
+    }, [filteredRows, sort]);
 
     // Pagination
     const totalPages   = Math.max(1, Math.ceil(tableRows.length / PAGE_SIZE));
@@ -165,29 +192,85 @@ export function ContributionPage({ months, viewMode, prevMonths }: Props) {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pb-2 px-2 sm:px-4">
-                            <div style={{ width: "100%", height: 240 }}>
+                            <div style={{ width: "100%", height: 260 }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart
-                                        data={chartRows.map(r => ({ name: r.product_name, value: r.contribution_value }))}
-                                        margin={{ left: 10, right: 10, top: 4, bottom: 56 }}
+                                    <ComposedChart
+                                        data={chartRows}
+                                        margin={{ left: 0, right: 0, top: 8, bottom: 60 }}
                                     >
                                         <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                        <XAxis dataKey="name" tickLine={false} axisLine={false}
+                                        <XAxis
+                                            dataKey="name"
+                                            tickLine={false}
+                                            axisLine={false}
                                             tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                                            angle={-40} textAnchor="end" interval={0} />
-                                        <YAxis tickLine={false} axisLine={false}
-                                            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                                            tickFormatter={v => fmt(v, { rupee: true })} width={80} />
-                                        <Tooltip
-                                            formatter={(v: number) => [fmt(v, { rupee: true }), "Contribution Value"]}
-                                            contentStyle={{ fontSize: 12, background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                                            angle={-40}
+                                            textAnchor="end"
+                                            interval={0}
                                         />
-                                        <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                                        <YAxis
+                                            yAxisId="value"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickMargin={4}
+                                            tickFormatter={v => fmt(v, { rupee: true })}
+                                            width={112}
+                                            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                                        />
+                                        <YAxis
+                                            yAxisId="rate"
+                                            orientation="right"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickMargin={4}
+                                            tickFormatter={v => `₹${v.toFixed(0)}`}
+                                            width={64}
+                                            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                                        />
+                                        <Tooltip
+                                            cursor={false}
+                                            content={(props: any) => {
+                                                const { active, payload, label } = props;
+                                                if (!active || !payload?.length) return null;
+                                                return (
+                                                    <div className="bg-popover border border-border rounded-lg p-3 text-xs text-popover-foreground shadow-md max-w-52">
+                                                        <div className="font-semibold mb-2 text-sm leading-tight">{label}</div>
+                                                        <div className="space-y-1.5">
+                                                            {payload.map((entry: any, i: number) => (
+                                                                <div key={i} className="flex items-center justify-between gap-3">
+                                                                    <span className="flex items-center gap-1.5">
+                                                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                                                                        <span className="text-muted-foreground font-medium">
+                                                                            {entry.dataKey === "contribution_value" ? "Contribution" : "Rate / kg"}
+                                                                        </span>
+                                                                    </span>
+                                                                    <span className="font-semibold">
+                                                                        {entry.dataKey === "contribution_value"
+                                                                            ? fmt(Number(entry.value), { rupee: true })
+                                                                            : `₹${Number(entry.value).toFixed(2)}/kg`}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+                                        <Bar yAxisId="value" dataKey="contribution_value" radius={[3, 3, 0, 0]}>
                                             {chartRows.map((r, i) => (
-                                                <Cell key={i} fill={r.contribution_value >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR} fillOpacity={0.85} />
+                                                <Cell key={i} fill={r.contribution_value >= 0 ? BAR_COLOR_POS : BAR_COLOR_NEG} fillOpacity={0.85} />
                                             ))}
                                         </Bar>
-                                    </BarChart>
+                                        <Line
+                                            yAxisId="rate"
+                                            type="linear"
+                                            dataKey="contribution_per_kg"
+                                            stroke={LINE_COLOR}
+                                            strokeWidth={2}
+                                            dot={{ fill: LINE_COLOR, r: 3 }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
                         </CardContent>
@@ -241,6 +324,44 @@ export function ContributionPage({ months, viewMode, prevMonths }: Props) {
                             )}
                         </div>
 
+                        {/* Product multi-select */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="h-7 min-w-40 justify-between bg-background border-border font-normal text-xs px-2.5 gap-1.5">
+                                    <span className="flex gap-1 flex-wrap max-w-28 overflow-hidden">
+                                        {selectedProducts.length > 0
+                                            ? selectedProducts.slice(0, 2).map(p => (
+                                                <span key={p} className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary rounded border-0">
+                                                    {p}
+                                                </span>
+                                            ))
+                                            : <span className="text-muted-foreground">Products…</span>}
+                                        {selectedProducts.length > 2 && (
+                                            <span className="text-[10px] text-muted-foreground">+{selectedProducts.length - 2}</span>
+                                        )}
+                                    </span>
+                                    <ChevronDown size={12} className="shrink-0 text-muted-foreground" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent side="bottom" align="start" avoidCollisions={false} className="w-56 bg-popover border border-border z-50 max-h-72 overflow-auto">
+                                {productOptions.map(p => (
+                                    <DropdownMenuCheckboxItem
+                                        key={p}
+                                        checked={selectedProducts.includes(p)}
+                                        onCheckedChange={() => {
+                                            setPage(1);
+                                            setSelectedProducts(prev =>
+                                                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                                            );
+                                        }}
+                                        className="text-xs"
+                                    >
+                                        {p}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
                         {/* Profit filter pills */}
                         <div className="flex items-center gap-1">
                             {(["all", "positive", "negative"] as ProfitFilter[]).map(f => (
@@ -269,8 +390,8 @@ export function ContributionPage({ months, viewMode, prevMonths }: Props) {
                             <span className="font-semibold text-foreground">{tableRows.length}</span>
                             {tableRows.length !== curRows.length && <> (filtered from <span className="font-semibold text-foreground">{curRows.length}</span>)</>}
                         </span>
-                        {(search || profitFilter !== "all") && (
-                            <button onClick={() => { setPage(1); setSearch(""); setProfitFilter("all"); }}
+                        {(search || profitFilter !== "all" || selectedProducts.length > 0) && (
+                            <button onClick={() => { setPage(1); setSearch(""); setProfitFilter("all"); setSelectedProducts([]); }}
                                 className="flex items-center gap-1 text-primary hover:underline">
                                 <X size={10} /> Clear filters
                             </button>

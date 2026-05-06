@@ -17,6 +17,7 @@ export interface MtyRow {
     month: string;
     line_item: string;
     value: number | null;
+    qty: number | null;
 }
 
 export interface ConsumptionRow {

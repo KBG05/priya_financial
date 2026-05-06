@@ -1,0 +1,128 @@
+"""
+Ingest HDPE Discount data from Purchase sheet.
+
+Source: InputTallyTarka/Sales_Pur_Exps-Nov.25.xlsx -> Purchase sheet
+Column O, Rows 5-16 (monthly HDPE discount values)
+"""
+
+from pathlib import Path
+from typing import Optional
+import openpyxl
+
+from .db import MONTHS
+
+
+def create_hdpe_discount_table(conn, fy_suffix: str) -> None:
+    """Create HDPE discount table for a specific fiscal year."""
+    table_name = f"hdpe_discount_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            month TEXT NOT NULL,
+            value REAL,
+            UNIQUE(month)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == '' or val == ' ':
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def ingest_hdpe_discount(conn, input_dir: Path, fy_suffix: str) -> int:
+    """
+    Ingest HDPE discount data from Purchase sheet.
+    
+    Args:
+        conn: Database connection
+        input_dir: Path to InputTallyTarka directory
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+    
+    Returns:
+        Number of records inserted
+    """
+    files = list(input_dir.glob('Sales_Pur_Exps*.xlsx'))
+    if not files:
+        raise FileNotFoundError(f"No Sales_Pur_Exps file found in {input_dir}")
+    
+    filepath = files[0]
+    print(f"\n[HDPE DISCOUNT] Reading from: {filepath.name}")
+    
+    create_hdpe_discount_table(conn, fy_suffix)
+    table_name = f"hdpe_discount_{fy_suffix}"
+    conn.execute(f"DELETE FROM {table_name}")
+    
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb['Purchase']
+    
+    # Month row mapping (rows 5-16 correspond to Apr-Mar)
+    # Row 5 = Apr, Row 6 = May, ..., Row 16 = Mar
+    month_rows = {
+        5: 'Apr', 6: 'May', 7: 'Jun', 8: 'Jul',
+        9: 'Aug', 10: 'Sep', 11: 'Oct', 12: 'Nov',
+        13: 'Dec', 14: 'Jan', 15: 'Feb', 16: 'Mar'
+    }
+    
+    records = []
+    
+    for row_idx, month in month_rows.items():
+        row = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+        
+        # Column O is index 14 (0-indexed)
+        value = safe_float(row[14] if len(row) > 14 else None)
+        
+        if value is not None:
+            records.append({
+                'month': month,
+                'value': value,
+            })
+    
+    wb.close()
+    
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name}
+            (month, value)
+            VALUES (%s, %s)
+        """, (rec['month'], rec['value']))
+    
+    conn.commit()
+    
+    total = len(records)
+    print(f"  ✓ Inserted {total} HDPE discount records into {table_name}")
+    
+    return total
+
+
+if __name__ == '__main__':
+    # Test standalone
+    from .db import get_connection
+    
+    conn = get_connection()
+    count = ingest_hdpe_discount(conn, Path('InputTallyTarka'), '25_26')
+    print(f"\nTotal records: {count}")
+    
+    # Show all records
+    cursor = conn.execute("""
+        SELECT month, value FROM hdpe_discount_25_26
+        ORDER BY CASE month
+            WHEN 'Apr' THEN 1 WHEN 'May' THEN 2 WHEN 'Jun' THEN 3
+            WHEN 'Jul' THEN 4 WHEN 'Aug' THEN 5 WHEN 'Sep' THEN 6
+            WHEN 'Oct' THEN 7 WHEN 'Nov' THEN 8 WHEN 'Dec' THEN 9
+            WHEN 'Jan' THEN 10 WHEN 'Feb' THEN 11 WHEN 'Mar' THEN 12
+        END
+    """)
+    print("\nHDPE Discount by month:")
+    for row in cursor:
+        print(f"  {row[0]}: {row[1]:,.2f}")
+    
+    conn.close()

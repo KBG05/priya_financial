@@ -21,21 +21,33 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "pal1",             label: "PAL-1 (P&L)",    icon: BarChart3 },
   { id: "mty",              label: "MTY",             icon: TrendingUp },
   { id: "consumption",      label: "Consumption",     icon: Package },
-  { id: "kpis",             label: "KPI Scorecard",   icon: Target },
-  { id: "direct_expenses",  label: "Direct Expenses", icon: Receipt },
   { id: "contribution",     label: "Contribution",    icon: DollarSign },
+  { id: "direct_expenses",  label: "Direct Expenses", icon: Receipt },
+  { id: "kpis",             label: "KPI Scorecard",   icon: Target },
 ];
 
 function Dashboard() {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [availableFYs, setAvailableFYs] = useState<string[]>([]);
+  const [fy, setFy] = useState<string>("");
   const [activeTab, setActiveTab] = useState<TabId>("pal1");
   const [viewMode, setViewMode] = useState<ViewMode>("single");
   const [months, setMonths] = useState<string[]>([]);
   const [prevMonths, setPrevMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Load available FYs first, then load months for the default FY
   useEffect(() => {
-    api.months().then(({ months: m }) => {
+    api.fyList().then(({ fy_list, default: defaultFy }) => {
+      setAvailableFYs(fy_list.length ? fy_list : [defaultFy]);
+      setFy(defaultFy);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!fy) return;
+    setLoading(true);
+    api.months(fy).then(({ months: m }) => {
       setAvailableMonths(m);
       if (m.length > 0) {
         setMonths([m[m.length - 1]]);
@@ -43,7 +55,7 @@ function Dashboard() {
       }
       setLoading(false);
     });
-  }, []);
+  }, [fy]);
 
   useEffect(() => {
     if (viewMode === "single" && months.length === 1) {
@@ -102,7 +114,7 @@ function Dashboard() {
           </nav>
 
           {/* Right controls */}
-          <TopBarRight />
+          <TopBarRight availableMonths={availableMonths} fy={fy} availableFYs={availableFYs} />
         </div>
       </header>
 
@@ -111,8 +123,11 @@ function Dashboard() {
         {/* Filters */}
         <FilterBar
           availableMonths={availableMonths}
+          availableFYs={availableFYs}
+          fy={fy}
           viewMode={viewMode}
           selectedMonths={months}
+          onFyChange={setFy}
           onViewModeChange={setViewMode}
           onMonthsChange={setMonths}
         />
@@ -121,12 +136,12 @@ function Dashboard() {
 
         {/* Page content */}
         <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
-          {activeTab === "pal1"            && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          {activeTab === "mty"             && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
-          {activeTab === "contribution"    && <ContributionPage months={months} viewMode={viewMode} prevMonths={prevMonths} />}
+          {activeTab === "pal1"            && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+          {activeTab === "mty"             && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+          {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+          {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+          {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+          {activeTab === "contribution"    && <ContributionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
         </div>
       </main>
     </div>

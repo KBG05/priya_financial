@@ -1,0 +1,238 @@
+"""
+Ingest Balance Sheet data from either:
+  1. MIS output Excel file ("Balance Sheet" sheet, month columns in row 2)
+  2. BS_PL_CF / PL_BS_CF Tally export (single-month sheet, two-sided layout)
+
+Tally export structure (BS_Mar26 / BS-Feb26 / BS_Nov.'25 etc.):
+  Row 8  : date range "1-Mar-26 to 31-Mar-26"  -> extract month
+  Row 10 : column headers (Liabilities | Assets)
+  Rows 11-34: two-sided data
+    Left  cols A/B/C : Liabilities  (B=line-item value, C=category total)
+    Right cols D/E/F : Assets       (E=line-item value, F=category total)
+  Row 35 : "Total" row - skip
+
+Single-month sheet detected by: name starts with "BS" and "APR" not in name.
+"""
+
+from pathlib import Path
+from typing import Optional
+import re
+import openpyxl
+
+
+def create_balance_sheet_table(conn, fy_suffix: str) -> None:
+    """Create balance sheet table for a specific fiscal year."""
+    table_name = f"balance_sheet_{fy_suffix}"
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            line_item TEXT NOT NULL,
+            category TEXT NOT NULL,
+            month TEXT NOT NULL,
+            value REAL,
+            UNIQUE(line_item, month)
+        )
+    """
+    )
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == "" or val == " ":
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# MIS format helpers
+# ---------------------------------------------------------------------------
+
+# Balance sheet structure: {category_name: (category_row, [line_item_rows])}
+BALANCE_SHEET_STRUCTURE = {
+    "Capital Account": (4, [5, 7, 8]),
+    "Loans (Liability)": (10, [11, 12, 13, 14, 15, 16]),
+    "Current Liabilities": (18, [19, 20, 21, 22, 23, 24, 25]),
+    "Profit & Loss A/c": (27, [28, 29]),
+    "Fixed Assets": (34, [35, 36, 37, 38, 39, 40, 41]),
+    "Investments": (43, [44]),
+    "Current Assets": (46, [47, 48, 49, 50, 51, 52, 53, 54]),
+}
+
+
+def _ingest_mis_format(conn, wb, table_name: str) -> int:
+    """Parse MIS 'Balance Sheet' sheet with month columns in row 2."""
+    ws = wb["Balance Sheet"]
+
+    month_cols = {}
+    row2 = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
+    for col_idx in range(1, len(row2)):
+        month = row2[col_idx]
+        if month and isinstance(month, str) and month.strip():
+            month_cols[month.strip()] = col_idx
+
+    print(f"  Found {len(month_cols)} months: {list(month_cols.keys())}")
+
+    conn.execute(f"DELETE FROM {table_name}")
+    records = []
+
+    for category_name, (cat_row, item_rows) in BALANCE_SHEET_STRUCTURE.items():
+        for item_row in item_rows:
+            if item_row >= ws.max_row:
+                continue
+            row = list(ws.iter_rows(min_row=item_row, max_row=item_row, values_only=True))[0]
+            line_item = str(row[0]).strip() if row[0] else None
+            if not line_item:
+                continue
+            for month, col_idx in month_cols.items():
+                value = safe_float(row[col_idx])
+                if value is not None:
+                    records.append({"line_item": line_item, "category": category_name,
+                                    "month": month, "value": value})
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(
+            f"INSERT INTO {table_name} (line_item, category, month, value) VALUES (%s, %s, %s, %s)",
+            (rec["line_item"], rec["category"], rec["month"], rec["value"]),
+        )
+    conn.commit()
+    return len(records)
+
+
+# ---------------------------------------------------------------------------
+# Tally BS_PL_CF format helpers
+# ---------------------------------------------------------------------------
+
+def _find_bs_single_month_sheet(wb) -> Optional[str]:
+    """Return the name of the single-month BS sheet (not the cumulative Apr-XX sheet)."""
+    for name in wb.sheetnames:
+        upper = name.upper()
+        if upper.startswith("BS") and "APR" not in upper:
+            return name
+    return None
+
+
+def _extract_month_from_row8(value) -> Optional[str]:
+    """Extract 3-letter month from date range string like '1-Mar-26 to 31-Mar-26'."""
+    if not value or not isinstance(value, str):
+        return None
+    m = re.search(r"\d+-(\w{3})-\d+\s+to\s+\d+-(\w{3})-\d+", value)
+    if m:
+        return m.group(2)  # end-date month abbreviation
+    return None
+
+
+def _ingest_tally_format(conn, wb, table_name: str) -> int:
+    """Parse two-sided Balance Sheet layout from a BS_PL_CF Tally export."""
+    sheet_name = _find_bs_single_month_sheet(wb)
+    if not sheet_name:
+        raise ValueError("Could not find single-month BS sheet (BS... without Apr) in workbook")
+
+    ws = wb[sheet_name]
+    all_rows = list(ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True))
+
+    month = _extract_month_from_row8(all_rows[7][0] if len(all_rows) > 7 else None)
+    if not month:
+        raise ValueError(f"Could not extract month from row 8 of sheet '{sheet_name}'")
+
+    print(f"  Sheet: {sheet_name}, month: {month}")
+
+    # Delete any existing records for this month before re-inserting
+    conn.execute(f"DELETE FROM {table_name} WHERE month=%s", (month,))
+
+    records = []
+    current_liab_cat: Optional[str] = None
+    current_asset_cat: Optional[str] = None
+
+    # Data rows: index 10-33 (rows 11-34), row 35 is "Total" — stop before it
+    for row in all_rows[10:34]:
+        # --- Left side: Liabilities (cols A=0, B=1, C=2) ---
+        name_l = str(row[0]).strip() if row[0] not in (None, "") else None
+        val_l_item = safe_float(row[1])   # line-item value
+        val_l_cat  = safe_float(row[2])   # category total (flags header row)
+
+        if name_l:
+            if val_l_cat is not None:
+                current_liab_cat = name_l  # new category header
+            elif val_l_item is not None and current_liab_cat:
+                records.append({"line_item": name_l, "category": current_liab_cat,
+                                 "month": month, "value": val_l_item})
+
+        # --- Right side: Assets (cols D=3, E=4, F=5) ---
+        name_r = str(row[3]).strip() if row[3] not in (None, "") else None
+        val_r_item = safe_float(row[4])   # line-item value
+        val_r_cat  = safe_float(row[5])   # category total (flags header row)
+
+        if name_r:
+            if val_r_cat is not None:
+                current_asset_cat = name_r  # new category header
+            elif val_r_item is not None and current_asset_cat:
+                records.append({"line_item": name_r, "category": current_asset_cat,
+                                 "month": month, "value": val_r_item})
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(
+            f"""INSERT INTO {table_name} (line_item, category, month, value)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (line_item, month) DO UPDATE SET value=EXCLUDED.value, category=EXCLUDED.category""",
+            (rec["line_item"], rec["category"], rec["month"], rec["value"]),
+        )
+    conn.commit()
+    return len(records)
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+def ingest_balance_sheet(conn, filepath: Path, fy_suffix: str) -> int:
+    """
+    Ingest balance sheet data from Excel file.
+
+    Auto-detects format:
+      - If workbook contains "Balance Sheet" sheet → MIS multi-month format
+      - Otherwise → BS_PL_CF Tally single-month format (BS_Mar26 / BS-Feb26 etc.)
+
+    Args:
+        conn: Database connection
+        filepath: Path to Excel file
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+
+    Returns:
+        Number of records inserted
+    """
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+    print(f"\n[BALANCE SHEET] Reading from: {filepath.name}")
+
+    create_balance_sheet_table(conn, fy_suffix)
+    table_name = f"balance_sheet_{fy_suffix}"
+
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+
+    if "Balance Sheet" in wb.sheetnames:
+        print("  Format: MIS (multi-month)")
+        total = _ingest_mis_format(conn, wb, table_name)
+    else:
+        print("  Format: Tally BS_PL_CF (single-month)")
+        total = _ingest_tally_format(conn, wb, table_name)
+
+    wb.close()
+
+    print(f"  ✓ Inserted/updated {total} balance sheet records in {table_name}")
+
+    cursor = conn.execute(
+        f"""SELECT category, COUNT(DISTINCT line_item) as items, COUNT(*) as records
+            FROM {table_name} GROUP BY category ORDER BY category"""
+    )
+    for row in cursor:
+        print(f"    {row[0]}: {row[1]} items, {row[2]} records")
+
+    return total

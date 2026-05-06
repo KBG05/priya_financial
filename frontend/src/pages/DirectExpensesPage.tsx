@@ -8,9 +8,9 @@ import { buildLedgerData } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
 
-interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
+interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
-export function DirectExpensesPage({ months, viewMode }: Props) {
+export function DirectExpensesPage({ months, viewMode, fy }: Props) {
     const [data, setData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -21,8 +21,8 @@ export function DirectExpensesPage({ months, viewMode }: Props) {
         setLoading(true);
         const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
-            api.directExpenses(months),
-            api.directExpenses(allMonths),
+            api.directExpenses(months, fy),
+            api.directExpenses(allMonths, fy),
         ]).then(([r, all]) => {
             setData(r.data);
             setAllData(all.data);
@@ -47,7 +47,9 @@ export function DirectExpensesPage({ months, viewMode }: Props) {
         return { month: m, value: val };
     });
 
-    const curTotal = data.filter(r => r.month === cur).reduce((s, r) => s + (r.value ?? 0), 0);
+    const curTotal = viewMode === "single"
+        ? data.filter(r => r.month === cur).reduce((s, r) => s + (r.value ?? 0), 0)
+        : data.filter(r => months.includes(r.month)).reduce((s, r) => s + (r.value ?? 0), 0);
 
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">

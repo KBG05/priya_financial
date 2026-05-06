@@ -10,19 +10,22 @@ To migrate to Postgres:
 """
 
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
 
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+
+_NAMED_PARAM_RE = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _get_conn():
     if DATABASE_URL.startswith("postgresql") or DATABASE_URL.startswith("postgres"):
         import psycopg2
-        import psycopg2.extras
         conn = psycopg2.connect(DATABASE_URL)
         return conn, "pg"
     else:
@@ -32,23 +35,23 @@ def _get_conn():
         return conn, "sqlite"
 
 
-def query(sql: str, params: dict = {}) -> list[dict]:
+def _to_pg_sql(sql: str) -> str:
+    return _NAMED_PARAM_RE.sub(r"%(\1)s", sql)
+
+
+def query(sql: str, params: dict[str, Any] | None = None) -> list[dict]:
     """
     Execute a parameterized SELECT.
-    Params use :name style (auto-converted to %s for psycopg2).
+    Params use :name style (auto-converted to %(name)s for psycopg2).
     """
+    params = params or {}
     conn, driver = _get_conn()
     try:
         cur = conn.cursor()
         if driver == "pg":
-            import psycopg2.extras
-            # Convert :name style to %(name)s for psycopg2
-            pg_sql = sql
-            # Sort keys by length descending to prevent :m1 from matching inside :m10
-            for k in sorted(params.keys(), key=len, reverse=True):
-                pg_sql = pg_sql.replace(f":{k}", f"%({k})s")
-            cur.execute(pg_sql, params)
-            cols = [d[0] for d in cur.description]
+            pg_sql = _to_pg_sql(sql)
+            cur.execute(pg_sql, params or None)
+            cols = [d[0] for d in cur.description] if cur.description else []
             return [dict(zip(cols, row)) for row in cur.fetchall()]
         else:
             cur.execute(sql, params)

@@ -48,15 +48,18 @@ function sparkPath(history: number[], w = 72, h = 24): string {
 }
 
 /** Inline sparkline SVG */
-function Sparkline({ history, positive }: { history: number[]; positive: boolean }) {
+function Sparkline({ history, positive, neutral }: { history: number[]; positive: boolean; neutral?: boolean }) {
     if (!history || history.length < 2) return <span className="w-18" />;
     const pts = sparkPath(history);
+    const stroke = neutral
+        ? "hsl(var(--muted-foreground))"
+        : positive ? "hsl(var(--primary))" : "hsl(var(--destructive))";
     return (
         <svg width={72} height={24} viewBox={`0 0 72 24`} className="shrink-0">
             <polyline
                 points={pts}
                 fill="none"
-                stroke={positive ? "hsl(var(--primary))" : "hsl(var(--destructive))"}
+                stroke={stroke}
                 strokeWidth={1.5}
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -124,12 +127,12 @@ export function HeroMetricsPanel({ metrics }: Props) {
                     <div className="flex flex-col divide-y divide-border/20 flex-1 min-h-0 overflow-y-auto">
                         {metrics.map(m => {
                             const Icon = getIcon(m.title);
-                            const isPositive =
-                                m.deltaMode === "neutral"
-                                    ? true
-                                    : m.deltaMode === "inverse"
-                                        ? (m.value ?? 0) < (m.prevValue ?? 0)
-                                        : (m.value ?? 0) >= (m.prevValue ?? 0);
+                            const isNeutral = m.deltaMode === "neutral";
+                            const isPositive = isNeutral
+                                ? true
+                                : m.deltaMode === "inverse"
+                                    ? (m.value ?? 0) < (m.prevValue ?? 0)
+                                    : (m.value ?? 0) >= (m.prevValue ?? 0);
 
                             const formatted = fmt(m.value, { rupee: m.rupee, pct: m.pct });
 
@@ -150,7 +153,7 @@ export function HeroMetricsPanel({ metrics }: Props) {
                                         </p>
                                     </div>
                                     {/* Sparkline */}
-                                    <Sparkline history={m.history ?? []} positive={isPositive} />
+                                    <Sparkline history={m.history ?? []} positive={isPositive} neutral={isNeutral} />
                                 </div>
                             );
                         })}

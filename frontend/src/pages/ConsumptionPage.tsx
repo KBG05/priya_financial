@@ -9,10 +9,10 @@ import { fmt } from "@/lib/format";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
 
-interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
+interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 interface MatRow { month: string; material: string;[k: string]: any; }
 
-export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
+export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<MatRow[]>([]);
     const [prevData, setPrevData] = useState<MatRow[]>([]);
     const [allData, setAllData] = useState<MatRow[]>([]);
@@ -32,9 +32,9 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
         setLoading(true);
         const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
-            api.consumption(months),
-            prevMonths.length ? api.consumption(prevMonths) : Promise.resolve({ data: [] }),
-            api.consumption(allMonths),
+            api.consumption(months, fy),
+            prevMonths.length ? api.consumption(prevMonths, fy) : Promise.resolve({ data: [] }),
+            api.consumption(allMonths, fy),
         ]).then(([r, p, all]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setAllData(all.data as MatRow[]); setLoading(false); });
     }, [months.join(","), prevMonths.join(",")]);
 
@@ -46,8 +46,10 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
 
     const curData = data.filter(r => r.month === cur);
     const prevCurData = prevData.filter(r => r.month === prev);
-    const totVal = curData.reduce((s, r) => s + (r.value ?? 0), 0);
-    const totQty = curData.reduce((s, r) => s + (r.qty ?? 0), 0);
+    // For multi-month view, aggregate across all selected months
+    const aggData = viewMode === "single" ? curData : data.filter(r => months.includes(r.month));
+    const totVal = aggData.reduce((s, r) => s + (r.value ?? 0), 0);
+    const totQty = aggData.reduce((s, r) => s + (r.qty ?? 0), 0);
     const prevTotVal = prevCurData.reduce((s, r) => s + (r.value ?? 0), 0);
     const prevTotQty = prevCurData.reduce((s, r) => s + (r.qty ?? 0), 0);
 
@@ -63,7 +65,9 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
         const matRow = allData.find(r => r.material === trendOption && r.month === m);
         return {
             month: m,
-            value: matRow?.qty ?? 0
+            value: matRow?.value ?? 0,
+            rate: matRow?.rate ?? (matRow?.qty ? (matRow.value / matRow.qty) : 0),
+            qty: matRow?.qty ?? 0,
         };
     });
 
@@ -113,12 +117,18 @@ export function ConsumptionPage({ months, viewMode, prevMonths }: Props) {
             <div className="flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 min-w-0">
                     <TrendChart
-                        title={`${trendOption} Trend (Qty)`}
+                        title={`${trendOption} Trend`}
                         data={trendData}
                         dataKey="value"
+                        combo
+                        barKey="value"
+                        lineKey="rate"
+                        qtyKey="qty"
                         options={materials}
                         selectedOption={trendOption}
                         onOptionChange={setTrendOption}
+                        barRupee
+                        lineRupee
                     />
                 </div>
                 <HeroMetricsPanel

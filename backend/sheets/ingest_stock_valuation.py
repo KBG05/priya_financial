@@ -1,0 +1,164 @@
+"""
+Ingest Stock Valuation data from Stock Valuation (FIFO) Excel file.
+
+Source: InputTallyTarka/Stock Valuation (FIFO).xlsx
+
+Structure:
+- Row 2: Month headers (dates)
+- Row 3: Column headers (QTY IN KGS, BASIC RATE, BASIC VALUE repeating)
+- Columns 1-3: Opening Stock (QTY, RATE, VALUE)
+- Then every 3 columns per month: QTY, RATE, VALUE
+
+Categories:
+- RAW_MATERIALS: rows 5-7 (HDPE, MB, CP)
+- WIP: rows 10-11 (HDPE Tape - Factory, HDPE Tape - Job Work)
+- FINISHED_GOODS: rows 14-19, 22-23 (Fabrics, shade nets, etc.)
+- Skip all Total rows (8, 12, 20, 21, 25, 26, 27)
+"""
+
+from pathlib import Path
+from typing import Optional
+import openpyxl
+from datetime import datetime
+
+
+def create_stock_valuation_table(conn, fy_suffix: str) -> None:
+    """Create stock valuation table for a specific fiscal year."""
+    table_name = f"stock_valuation_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            material TEXT NOT NULL,
+            category TEXT NOT NULL,
+            month TEXT NOT NULL,
+            qty REAL,
+            rate REAL,
+            value REAL,
+            UNIQUE(material, month)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == '' or val == ' ':
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# Material definitions: (row_num, material_name, category)
+MATERIALS = [
+    # RAW_MATERIALS
+    (5, 'HDPE Granules', 'RAW_MATERIALS'),
+    (6, 'Master Batches', 'RAW_MATERIALS'),
+    (7, 'Colour Pigments', 'RAW_MATERIALS'),
+    # WIP
+    (10, 'HDPE Tape - Factory', 'WIP'),
+    (11, 'HDPE Tape - Job Work', 'WIP'),
+    # FINISHED_GOODS
+    (14, 'HDPE Fishnet Fabrics', 'FINISHED_GOODS'),
+    (15, 'Monofilament Shade Net -MSN', 'FINISHED_GOODS'),
+    (16, 'Tape Shade Net-TSN', 'FINISHED_GOODS'),
+    (17, 'Weed Mat', 'FINISHED_GOODS'),
+    (18, 'PP Fabric & Sacks', 'FINISHED_GOODS'),
+    (19, 'Miscellaneous', 'FINISHED_GOODS'),
+    (22, 'Packing Materials', 'FINISHED_GOODS'),
+    (23, 'Seconds', 'FINISHED_GOODS'),
+]
+
+
+def ingest_stock_valuation(conn, filepath: Path, fy_suffix: str) -> int:
+    """
+    Ingest stock valuation data from Excel file.
+
+    Args:
+        conn: Database connection
+        filepath: Path to Sales_Pur_Exps Excel file
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+
+    Returns:
+        Number of records inserted
+    """
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    print(f"\n[STOCK VALUATION] Reading from: {filepath.name}")
+
+    create_stock_valuation_table(conn, fy_suffix)
+    table_name = f"stock_valuation_{fy_suffix}"
+    conn.execute(f"DELETE FROM {table_name}")
+
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb['Stock Valuation (FIFO)']
+
+    records = []
+
+    # Parse month columns from row 2 (index 1)
+    # Opening Stock = cols 1-3 (indices 1, 2, 3)
+    # Then months: Apr at col indices 4,5,6 | May at 7,8,9 | Jun at 10,11,12, etc.
+    month_cols = {'Op Stock': (1, 2, 3)}  # (qty_col, rate_col, value_col)
+    
+    row2 = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
+    for col_idx in range(4, len(row2), 3):  # Months at 4, 7, 10, 13, 16, ...
+        date_val = row2[col_idx]  # Date is at the first column of each 3-column group
+        if date_val and isinstance(date_val, datetime):
+            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            month = month_names[date_val.month - 1]
+            month_cols[month] = (col_idx, col_idx + 1, col_idx + 2)
+
+    print(f"  Found {len(month_cols)} periods: {list(month_cols.keys())}")
+
+    # Process each material
+    for row_num, material, category in MATERIALS:
+        if row_num >= ws.max_row:
+            continue
+
+        row = list(ws.iter_rows(min_row=row_num, max_row=row_num, values_only=True))[0]
+
+        for month, (qty_col, rate_col, value_col) in month_cols.items():
+            qty = safe_float(row[qty_col])
+            rate = safe_float(row[rate_col])
+            value = safe_float(row[value_col])
+
+            # Only insert if there's actual data
+            if qty is not None or value is not None:
+                records.append({
+                    'material': material,
+                    'category': category,
+                    'month': month,
+                    'qty': qty,
+                    'rate': rate,
+                    'value': value,
+                })
+
+    wb.close()
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name}
+            (material, category, month, qty, rate, value)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (rec['material'], rec['category'], rec['month'],
+              rec['qty'], rec['rate'], rec['value']))
+
+    conn.commit()
+
+    total = len(records)
+    print(f"  ✓ Inserted {total} stock valuation records into {table_name}")
+
+    # Summary by category
+    cursor = conn.execute(f"""
+        SELECT category, COUNT(DISTINCT material) as materials, COUNT(*) as records
+        FROM {table_name} GROUP BY category
+    """)
+    for row in cursor:
+        print(f"    {row[0]}: {row[1]} materials, {row[2]} records")
+
+    return total

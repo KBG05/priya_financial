@@ -3,7 +3,17 @@ import { fmt, calcDelta } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** Mini SVG trend sparkline — drawn from an array of historical values */
-function MiniSparkline({ values }: { values: number[] }) {
+function MiniSparkline({
+    values,
+    prevValue,
+    currentValue,
+    deltaMode = "default",
+}: {
+    values: number[];
+    prevValue?: number | null;
+    currentValue?: number | null;
+    deltaMode?: "default" | "neutral" | "inverse";
+}) {
     if (values.length < 2) return null;
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -15,8 +25,21 @@ function MiniSparkline({ values }: { values: number[] }) {
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
     const last = values[values.length - 1];
-    const up = last >= values[0];
-    const color = up ? "hsl(174 50% 50%)" : "hsl(0 60% 50%)";
+
+    // Determine trend direction: prefer prevValue comparison, fall back to first-vs-last
+    let up: boolean;
+    if (deltaMode === "neutral") {
+        up = true; // always neutral color
+    } else if (prevValue != null && currentValue != null) {
+        const diff = currentValue - prevValue;
+        up = deltaMode === "inverse" ? diff <= 0 : diff >= 0;
+    } else {
+        up = last >= values[0];
+    }
+
+    const color = deltaMode === "neutral"
+        ? "hsl(var(--muted-foreground))"
+        : up ? "hsl(174 50% 50%)" : "hsl(0 60% 50%)";
     const dotY = (H - ((last - min) / range) * H).toFixed(1);
     return (
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="opacity-80 mt-0.5">
@@ -94,7 +117,14 @@ export function MetricCard({
                     </span>
                 </div>
             )}
-            {hasHistory && <MiniSparkline values={history!} />}
+            {hasHistory && (
+                <MiniSparkline
+                    values={history!}
+                    prevValue={prevValue}
+                    currentValue={value}
+                    deltaMode={deltaMode}
+                />
+            )}
         </div>
     );
 }

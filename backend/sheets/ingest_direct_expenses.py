@@ -1,0 +1,145 @@
+"""
+Ingest Direct Expenses data from Sales_Pur_Exps Excel file.
+
+Source: InputTallyTarka/Sales_Pur_Exps-Nov.25.xlsx -> Direct Expns sheet
+
+Structure:
+- Row 2: Headers (Particulars, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar)
+- Rows 3-20: Expense items with monthly values
+- Row 22: Grand Total (skip)
+"""
+
+from pathlib import Path
+from typing import Optional
+import openpyxl
+
+from .db import MONTHS, get_connection
+
+
+def create_direct_expenses_table(conn, fy_suffix: str) -> None:
+    """Create direct expenses table for a specific fiscal year."""
+    table_name = f"direct_expenses_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            month TEXT NOT NULL,
+            expense_name TEXT NOT NULL,
+            value REAL,
+            UNIQUE(month, expense_name)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == '' or val == ' ':
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def ingest_direct_expenses(conn, filepath: Path, fy_suffix: str) -> int:
+    """
+    Ingest direct expenses data from Excel file.
+    
+    Args:
+        conn: Database connection
+        filepath: Path to Sales_Pur_Exps Excel file
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+    
+    Returns:
+        Number of records inserted
+    """
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    print(f"\n[DIRECT EXPENSES] Reading from: {filepath.name}")
+    
+    # Create table if needed
+    create_direct_expenses_table(conn, fy_suffix)
+    table_name = f"direct_expenses_{fy_suffix}"
+    conn.execute(f"DELETE FROM {table_name}")
+    
+    # Load workbook
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb['Direct Expns']
+    
+    # Month columns: B=Apr(1), C=May(2), ..., M=Mar(12)
+    month_cols = {
+        1: 'Apr', 2: 'May', 3: 'Jun', 4: 'Jul', 
+        5: 'Aug', 6: 'Sep', 7: 'Oct', 8: 'Nov',
+        9: 'Dec', 10: 'Jan', 11: 'Feb', 12: 'Mar'
+    }
+    
+    records = []
+    
+    # Process rows 3-20 (expense items) and row 26 (In House Fabrn only)
+    # Row 27 (Fabrn) is excluded as it can be calculated from Fabrication Charges
+    row_ranges = [range(3, 21), range(26, 27)]
+    
+    for row_range in row_ranges:
+        for row_idx in row_range:
+            row = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+            
+            expense_name = str(row[0]).strip() if row[0] else None
+            if not expense_name or expense_name == ' ':
+                continue
+            
+            # Skip header/section rows
+            if expense_name in ['Manufacturing Expenses', 'Group Summary', 'Manufacturing', 'Direct Expns']:
+                continue
+            
+            # Extract value for each month
+            for col_idx, month in month_cols.items():
+                value = safe_float(row[col_idx])
+                if value is not None:
+                    records.append({
+                        'month': month,
+                        'expense_name': expense_name,
+                        'value': value,
+                    })
+    
+    wb.close()
+    
+    # Insert all records
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name} 
+            (month, expense_name, category, value)
+            VALUES (%s, %s, 'DIRECT', %s)
+        """, (rec['month'], rec['expense_name'], rec['value']))
+    
+    conn.commit()
+    
+    total = len(records)
+    print(f"  ✓ Inserted {total} direct expense records into {table_name}")
+    
+    # Show unique expense names
+    cursor = conn.execute(f"SELECT DISTINCT expense_name FROM {table_name} ORDER BY expense_name")
+    expense_names = [row[0] for row in cursor]
+    print(f"  Expense categories: {len(expense_names)}")
+    for name in expense_names:
+        print(f"    - {name}")
+    
+    return total
+
+
+if __name__ == '__main__':
+    # Test standalone
+    from .db import get_connection
+    
+    conn = get_connection()
+    count = ingest_direct_expenses(conn, Path('InputTallyTarka'), '25_26')
+    print(f"\nTotal records: {count}")
+    
+    # Show sample
+    cursor = conn.execute("SELECT * FROM direct_expenses_25_26 LIMIT 10")
+    for row in cursor:
+        print(dict(row))
+    
+    conn.close()

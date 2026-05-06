@@ -1,0 +1,319 @@
+"""
+Calculate and populate Consumption output table.
+
+This module computes consumption for raw materials using:
+Consumption = Opening Stock + Purchases - Sales - Closing Stock
+
+Where:
+- Opening Stock = Previous month's closing stock from stock_valuation_25_26
+- Purchases = From purchases_25_26
+- Sales = From inventory_sales_25_26
+- Closing Stock = From stock_valuation_25_26 for current month
+
+Outputs:
+1. HDPE (individual)
+2. MB (individual)
+3. CP (individual)
+4. Raw Material Consumption (aggregate of HDPE + MB + CP)
+5. Total Monofil Consumption (Raw Material + Yarn + Other + Sravya + Consumables)
+"""
+
+from pathlib import Path
+from typing import Dict, Optional
+
+
+def create_consumption_output_table(conn, fy_suffix: str) -> None:
+    """Create consumption output table for a specific fiscal year."""
+    table_name = f"consumption_output_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            material TEXT NOT NULL,
+            month TEXT NOT NULL,
+            opening_stock_qty REAL,
+            opening_stock_value REAL,
+            purchases_qty REAL,
+            purchases_value REAL,
+            sales_qty REAL,
+            sales_value REAL,
+            closing_stock_qty REAL,
+            closing_stock_value REAL,
+            qty REAL,
+            value REAL,
+            rate REAL,
+            UNIQUE(material, month)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> float:
+    """Safely convert value to float, returning 0.0 if None."""
+    if val is None or val == '' or val == ' ':
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+# Map standardized short names to stock_valuation names
+STOCK_MATERIAL_MAP = {
+    'HDPE': 'HDPE Granules',
+    'MB': 'Master Batches',
+    'CP': 'Colour Pigments'
+}
+
+
+def get_stock_data(conn, fy_suffix: str, month: str, material: str):
+    """Get qty and value from stock_valuation for a material in a specific month."""
+    stock_material = STOCK_MATERIAL_MAP.get(material, material)
+    result = conn.execute(f"""
+        SELECT qty, value FROM stock_valuation_{fy_suffix}
+        WHERE category = 'RAW_MATERIALS' 
+        AND material = %s 
+        AND month = %s
+    """, (stock_material, month)).fetchone()
+    
+    if result:
+        return safe_float(result[0]), safe_float(result[1])
+    return 0.0, 0.0
+
+
+def get_previous_month(month: str) -> Optional[str]:
+    """Get the previous month. Returns None for April (start of FY)."""
+    month_order = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar']
+    try:
+        idx = month_order.index(month)
+        return month_order[idx - 1] if idx > 0 else None
+    except ValueError:
+        return None
+
+
+def get_purchases_data(conn, fy_suffix: str, month: str, material: str):
+    """Get qty and discounted_value from purchases for a material."""
+    result = conn.execute(f"""
+        SELECT qty, discounted_value FROM purchases_{fy_suffix}
+        WHERE month = %s 
+        AND material = %s
+        AND category = 'RAW_MATERIAL'
+    """, (month, material)).fetchone()
+    
+    if result:
+        return safe_float(result[0]), safe_float(result[1])
+    return 0.0, 0.0
+
+
+def get_rm_cost_rate(conn, fy_suffix: str, month: str) -> float:
+    """Get the manually-entered RM purchase cost rate from Inventory Sales row 42.
+    
+    This rate (e.g. 95.56 for Dec) is entered manually in the source sheet and
+    represents the purchase cost per kg of RM sold, used to value RM consumption
+    at cost rather than at selling price.
+    """
+    result = conn.execute(f"""
+        SELECT rate FROM inventory_sales_{fy_suffix}
+        WHERE month = %s AND category = 'RM_COST' AND product = 'RM Purchase for sales'
+    """, (month,)).fetchone()
+    return safe_float(result[0]) if result else 0.0
+
+
+def get_rm_cost_sale_value(conn, fy_suffix: str, month: str) -> float:
+    """Get Inventory Sales row 42 value for RM sold at purchase-cost basis."""
+    result = conn.execute(f"""
+        SELECT value FROM inventory_sales_{fy_suffix}
+        WHERE month = %s AND category = 'RM_COST' AND product = 'RM Purchase for sales'
+    """, (month,)).fetchone()
+    return safe_float(result[0]) if result else 0.0
+
+
+def get_sales_data(conn, fy_suffix: str, month: str, material: str,
+                   cost_rate: float = 0.0):
+    """Get qty and value from inventory_sales for a material.
+    
+    If cost_rate > 0, the value is computed as qty × cost_rate (purchase cost basis)
+    rather than the selling price value from inventory_sales. This matches the
+    Excel Inventory Sales row 42 'RM Purchase for sales' logic where a manually
+    entered rate is used to value RM sold at cost.
+    """
+    result = conn.execute(f"""
+        SELECT qty, value FROM inventory_sales_{fy_suffix}
+        WHERE month = %s 
+        AND product = %s
+    """, (month, material)).fetchone()
+    
+    if result:
+        qty = safe_float(result[0])
+        if cost_rate > 0 and qty > 0:
+            # Value at cost-basis rate (matching Inventory Sales row 42)
+            value = round(qty * cost_rate)
+        else:
+            value = safe_float(result[1])
+        return qty, value
+    return 0.0, 0.0
+
+
+def get_monofil_purchases_data(conn, fy_suffix: str, month: str):
+    """Get total qty and value of Yarn + Other + Sravya + Consumables purchases."""
+    result = conn.execute(f"""
+        SELECT SUM(qty), SUM(value) FROM purchases_{fy_suffix}
+        WHERE month = %s 
+        AND category = 'MONOFIL_OTHER'
+        AND material IN ('Yarn', 'Other', 'Sravya', 'Consumables')
+    """, (month,)).fetchone()
+    
+    if result:
+        return safe_float(result[0]), safe_float(result[1])
+    return 0.0, 0.0
+
+
+def safe_rate(value: float, qty: float) -> float:
+    """Calculate rate (value/qty) with zero-division protection."""
+    if qty == 0:
+        return 0.0
+    return value / qty
+
+
+def calculate_consumption_output(conn, fy_suffix: str) -> int:
+    """
+    Calculate Consumption output values from input tables.
+    
+    Args:
+        conn: Database connection
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+    
+    Returns:
+        Number of records inserted
+    """
+    table_name = f"consumption_output_{fy_suffix}"
+    
+    create_consumption_output_table(conn, fy_suffix)
+    conn.execute(f"DELETE FROM {table_name}")
+    
+    print(f"\n[CONSUMPTION OUTPUT] Calculating for FY {fy_suffix}")
+    
+    # Get all months from purchases table
+    cursor = conn.execute(f"""
+        SELECT DISTINCT month FROM purchases_{fy_suffix} 
+        WHERE category = 'RAW_MATERIAL'
+        ORDER BY month
+    """)
+    months = [row[0] for row in cursor]
+    print(f"  Processing {len(months)} months: {months}")
+    
+    # Materials to process
+    materials = ['HDPE', 'MB', 'CP']
+    
+    records = []
+    
+    for month in months:
+        # Aggregation accumulators for Raw Material total
+        agg = {
+            'op_qty': 0.0, 'op_val': 0.0,
+            'pur_qty': 0.0, 'pur_val': 0.0,
+            'sal_qty': 0.0, 'sal_val': 0.0,
+            'cl_qty': 0.0, 'cl_val': 0.0,
+            'con_qty': 0.0, 'con_val': 0.0
+        }
+        
+        # Fetch RM cost-basis rate once per month (from Inventory Sales row 42)
+        rm_cost_rate = get_rm_cost_rate(conn, fy_suffix, month)
+        rm_cost_sale_value = get_rm_cost_sale_value(conn, fy_suffix, month)
+
+        month_sales = {
+            material: get_sales_data(conn, fy_suffix, month, material)
+            for material in materials
+        }
+        month_sales['HDPE'] = (
+            month_sales['HDPE'][0],
+            rm_cost_sale_value - month_sales['MB'][1] - month_sales['CP'][1],
+        )
+        
+        # Process each individual material
+        for material in materials:
+            # Opening stock: April uses "Op Stock", others use prev month closing
+            if month == 'Apr':
+                op_qty, op_val = get_stock_data(conn, fy_suffix, 'Op Stock', material)
+            else:
+                prev_month = get_previous_month(month)
+                op_qty, op_val = get_stock_data(conn, fy_suffix, prev_month, material) if prev_month else (0.0, 0.0)
+            
+            # Current month data
+            pur_qty, pur_val = get_purchases_data(conn, fy_suffix, month, material)
+            sal_qty, sal_val = month_sales[material]
+            cl_qty, cl_val = get_stock_data(conn, fy_suffix, month, material)
+            
+            # Consumption = Opening + Purchases - Sales - Closing
+            con_qty = op_qty + pur_qty - sal_qty - cl_qty
+            con_val = op_val + pur_val - sal_val - cl_val
+            
+            records.append({
+                'material': material,
+                'month': month,
+                'opening_stock_qty': op_qty, 'opening_stock_value': op_val,
+                'purchases_qty': pur_qty, 'purchases_value': pur_val,
+                'sales_qty': sal_qty, 'sales_value': sal_val,
+                'closing_stock_qty': cl_qty, 'closing_stock_value': cl_val,
+                'qty': con_qty, 'value': con_val,
+                'rate': safe_rate(con_val, con_qty)
+            })
+            
+            # Accumulate for Raw Material total
+            agg['op_qty'] += op_qty; agg['op_val'] += op_val
+            agg['pur_qty'] += pur_qty; agg['pur_val'] += pur_val
+            agg['sal_qty'] += sal_qty; agg['sal_val'] += sal_val
+            agg['cl_qty'] += cl_qty; agg['cl_val'] += cl_val
+            agg['con_qty'] += con_qty; agg['con_val'] += con_val
+        
+        # Raw Material Consumption (aggregate)
+        records.append({
+            'material': 'Raw Material Consumption',
+            'month': month,
+            'opening_stock_qty': agg['op_qty'], 'opening_stock_value': agg['op_val'],
+            'purchases_qty': agg['pur_qty'], 'purchases_value': agg['pur_val'],
+            'sales_qty': agg['sal_qty'], 'sales_value': agg['sal_val'],
+            'closing_stock_qty': agg['cl_qty'], 'closing_stock_value': agg['cl_val'],
+            'qty': agg['con_qty'], 'value': agg['con_val'],
+            'rate': safe_rate(agg['con_val'], agg['con_qty'])
+        })
+        
+        # Total Monofil Consumption = Raw Material Consumption + 4 Monofil purchases
+        monofil_qty, monofil_val = get_monofil_purchases_data(conn, fy_suffix, month)
+        total_con_qty = agg['con_qty'] + monofil_qty
+        total_con_val = agg['con_val'] + monofil_val
+        
+        records.append({
+            'material': 'Total Monofil Consumption',
+            'month': month,
+            'opening_stock_qty': 0, 'opening_stock_value': 0,
+            'purchases_qty': monofil_qty, 'purchases_value': monofil_val,
+            'sales_qty': 0, 'sales_value': 0,
+            'closing_stock_qty': 0, 'closing_stock_value': 0,
+            'qty': total_con_qty,
+            'value': total_con_val,
+            'rate': safe_rate(total_con_val, total_con_qty)
+        })
+    
+    # Insert records
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name}
+            (material, month, opening_stock_qty, opening_stock_value,
+             purchases_qty, purchases_value, sales_qty, sales_value,
+             closing_stock_qty, closing_stock_value, qty, value, rate)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (rec['material'], rec['month'],
+              rec['opening_stock_qty'], rec['opening_stock_value'],
+              rec['purchases_qty'], rec['purchases_value'],
+              rec['sales_qty'], rec['sales_value'],
+              rec['closing_stock_qty'], rec['closing_stock_value'],
+              rec['qty'], rec['value'], rec['rate']))
+    
+    conn.commit()
+    
+    total = len(records)
+    print(f"  ✓ Inserted {total} consumption output records into {table_name}")
+    
+    return total

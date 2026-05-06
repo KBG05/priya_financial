@@ -1,0 +1,173 @@
+"""
+Ingest Inventory Sales data from Sales_Pur_Exps Excel file.
+
+Source: InputTallyTarka/Sales_Pur_Exps-Nov.25.xlsx -> Inventory Sales sheet
+
+Structure:
+- Row 2: Headers (Particulars, then repeating Apr/May/.../Mar with 3 cols each)
+- Row 3: Sub-headers (Finished Goods, Outwards Qty, Rate, Amount for each month)
+- Rows 5-10: Finished goods products (MCF, WMF, Monofilament variants, NWF)
+- Row 11: Finished goods subtotal (SKIP)
+- Rows 12-17: Trading products (MSN, TSN, PP Sacks, Anti Bird Net, Knitted Fabric, Weed Mat)
+- Row 18: Trading subtotal (SKIP)
+- Rows 21-25: Other sales (HDPE Waste, Assets, Colour Pigments, Master Batch, HDPE)
+- Row 26+: Totals/Discount/Tax (SKIP)
+
+Each month has 3 columns: Outwards Qty (col 1), Rate (col 2), Amount (col 3)
+Months start at column B=Apr, E=May, H=Jun, etc.
+"""
+
+from pathlib import Path
+from typing import Optional
+import openpyxl
+
+
+def create_inventory_sales_table(conn, fy_suffix: str) -> None:
+    """Create inventory sales table for a specific fiscal year."""
+    table_name = f"inventory_sales_{fy_suffix}"
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY,
+            month TEXT NOT NULL,
+            category TEXT NOT NULL,
+            product TEXT NOT NULL,
+            qty REAL,
+            rate REAL,
+            value REAL,
+            UNIQUE(month, product)
+        )
+    """)
+    conn.commit()
+    print(f"  ✓ Created table: {table_name}")
+
+
+def safe_float(val) -> Optional[float]:
+    """Safely convert value to float."""
+    if val is None or val == '' or val == ' ':
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# Product definitions: (row_num, product_name, category)
+PRODUCTS = [
+    # Finished Goods
+    (5, 'MCF', 'FINISHED_GOODS'),
+    (6, 'WMF', 'FINISHED_GOODS'),
+    (7, 'MONOFILAMENT FABRIC INSECT BAGS', 'FINISHED_GOODS'),
+    (8, 'MONOFILAMENT FABRIC INSECT NET', 'FINISHED_GOODS'),
+    (9, 'MONOFILAMENT FABRIC HAPPA', 'FINISHED_GOODS'),
+    (10, 'NWF/Yarn / Twisted Yarn', 'FINISHED_GOODS'),
+    # Trading
+    (12, 'MSN', 'TRADING'),
+    (13, 'TSN', 'TRADING'),
+    (14, 'PP Woven Sacks', 'TRADING'),
+    (15, 'ANTI BIRD NET / Rope/MULCH/FIBC', 'TRADING'),
+    (16, 'Knitted Fabric 8" Red/60" D Green', 'TRADING'),
+    (17, 'Weed Mat', 'TRADING'),
+    # Other Sales
+    (21, 'HDPE Monofilament Waste', 'OTHER_SALES'),
+    (22, 'Sale of Asset', 'OTHER_SALES'),
+    (23, 'CP', 'OTHER_SALES'),  # Normalized from "Colour Pigments"
+    (24, 'MB', 'OTHER_SALES'),  # Normalized from "Master Batch"
+    (25, 'HDPE', 'OTHER_SALES'),
+    (28, 'Other Income', 'OTHER_SALES'),  # Value only, no qty/rate
+    (35, 'Discount', 'OTHER_SALES'),  # Value only, no qty/rate
+    # RM Cost (row 42): qty = HDPE+MB+CP qty, rate = manually entered purchase cost rate
+    (42, 'RM Purchase for sales', 'RM_COST'),
+]
+
+# Month column mappings (1-indexed for openpyxl)
+# Each month has 3 columns: Qty, Rate, Amount
+# Apr starts at col B (1), May at E (4), Jun at H (7), etc.
+MONTH_COLS = {
+    'Apr': 1,
+    'May': 4,
+    'Jun': 7,
+    'Jul': 10,
+    'Aug': 13,
+    'Sep': 16,
+    'Oct': 19,
+    'Nov': 22,
+    'Dec': 25,
+    'Jan': 28,
+    'Feb': 31,
+    'Mar': 34,
+}
+
+
+def ingest_inventory_sales(conn, filepath: Path, fy_suffix: str) -> int:
+    """
+    Ingest inventory sales data from Excel file.
+
+    Args:
+        conn: Database connection
+        filepath: Path to Sales_Pur_Exps Excel file
+        fy_suffix: Fiscal year suffix (e.g., '25_26')
+
+    Returns:
+        Number of records inserted
+    """
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    print(f"\n[INVENTORY SALES] Reading from: {filepath.name}")
+
+    create_inventory_sales_table(conn, fy_suffix)
+    table_name = f"inventory_sales_{fy_suffix}"
+    conn.execute(f"DELETE FROM {table_name}")
+
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    ws = wb['Inventory Sales']
+
+    records = []
+
+    for row_num, product, category in PRODUCTS:
+        row = list(ws.iter_rows(min_row=row_num, max_row=row_num, values_only=True))[0]
+
+        for month, base_col in MONTH_COLS.items():
+            # Columns: base_col = Qty, base_col+1 = Rate, base_col+2 = Amount
+            qty = safe_float(row[base_col])
+            rate = safe_float(row[base_col + 1])
+            value = safe_float(row[base_col + 2])
+
+            # Skip if no data
+            if qty is None and rate is None and value is None:
+                continue
+
+            records.append({
+                'month': month,
+                'category': category,
+                'product': product,
+                'qty': qty,
+                'rate': rate,
+                'value': value,
+            })
+
+    wb.close()
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(f"""
+            INSERT INTO {table_name}
+            (month, category, product, qty, rate, value)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (rec['month'], rec['category'], rec['product'],
+              rec['qty'], rec['rate'], rec['value']))
+
+    conn.commit()
+
+    total = len(records)
+    print(f"  ✓ Inserted {total} inventory sales records into {table_name}")
+
+    # Summary by category
+    cursor = conn.execute(f"""
+        SELECT category, COUNT(DISTINCT product) as products, COUNT(*) as records
+        FROM {table_name} GROUP BY category
+    """)
+    for row in cursor:
+        print(f"    {row[0]}: {row[1]} products, {row[2]} records")
+
+    return total

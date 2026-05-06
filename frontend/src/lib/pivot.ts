@@ -92,3 +92,26 @@ export function getVal(
 ): number | null {
     return raw.find(x => x[labelKey] === label && x.month === month)?.[valueKey] ?? null;
 }
+
+/**
+ * Aggregate value across multiple months.
+ * snapshot=true  → take the last month's value (for stock/balance items)
+ * snapshot=false → sum all months (for flow items: sales, expenses, profit)
+ */
+export function aggVal(
+    raw: Row[], labelKey: string, label: string, months: string[],
+    opts?: { snapshot?: boolean; valueKey?: string }
+): number | null {
+    const valueKey = opts?.valueKey ?? "value";
+    const snapshot = opts?.snapshot ?? false;
+    if (!months.length) return null;
+    if (months.length === 1 || snapshot) {
+        const last = months[months.length - 1];
+        return raw.find(x => x[labelKey] === label && x.month === last)?.[valueKey] ?? null;
+    }
+    const vals = months.map(m =>
+        raw.find(x => x[labelKey] === label && x.month === m)?.[valueKey] ?? null
+    );
+    if (vals.every(v => v === null)) return null;
+    return vals.reduce<number>((sum, v) => sum + (v ?? 0), 0);
+}

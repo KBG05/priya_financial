@@ -18,15 +18,18 @@ const QUARTERS: Record<string, string[]> = {
 
 interface FilterBarProps {
     availableMonths: string[];
+    availableFYs: string[];
+    fy: string;
     viewMode: ViewMode;
     selectedMonths: string[];
+    onFyChange: (fy: string) => void;
     onViewModeChange: (vm: ViewMode) => void;
     onMonthsChange: (months: string[]) => void;
 }
 
 export function FilterBar({
-    availableMonths, viewMode, selectedMonths,
-    onViewModeChange, onMonthsChange,
+    availableMonths, availableFYs, fy, viewMode, selectedMonths,
+    onFyChange, onViewModeChange, onMonthsChange,
 }: FilterBarProps) {
     const curMonth = selectedMonths[selectedMonths.length - 1] ?? availableMonths[availableMonths.length - 1];
 
@@ -40,9 +43,8 @@ export function FilterBar({
             const idx = availableMonths.indexOf(last);
             onMonthsChange(availableMonths.slice(Math.max(0, idx - 2), idx + 1));
         } else {
-            // mty-all
-            const idx = MONTH_ORDER.indexOf(last as any);
-            onMonthsChange(MONTH_ORDER.slice(0, idx + 1).filter(m => availableMonths.includes(m)));
+            // mty-all: pass every available month
+            onMonthsChange([...availableMonths]);
         }
     };
 
@@ -67,6 +69,27 @@ export function FilterBar({
 
     return (
         <div className="flex flex-wrap items-end gap-3 p-4 bg-card card-elevated rounded-xl">
+            {/* Fiscal Year */}
+            {availableFYs.length > 1 && (
+                <>
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
+                        <Select value={fy} onValueChange={onFyChange}>
+                            <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent {...scProps}>
+                                {availableFYs.map(f => (
+                                    <SelectItem key={f} value={f}>
+                                        FY {f.replace("_", "-")}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
+                </>
+            )}
             {/* View Mode */}
             <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">View</label>
@@ -117,8 +140,8 @@ export function FilterBar({
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Custom (≤ 3)</label>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="h-8 min-w-[140px] justify-between bg-background border-border font-normal text-sm px-3 gap-1.5">
-                                    <span className="flex gap-1 flex-wrap max-w-[100px] overflow-hidden">
+                                <Button variant="outline" className="h-8 min-w-35 justify-between bg-background border-border font-normal text-sm px-3 gap-1.5">
+                                    <span className="flex gap-1 flex-wrap max-w-25 overflow-hidden">
                                         {selectedMonths.length > 0
                                             ? selectedMonths.map(m => <Badge key={m} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">{m}</Badge>)
                                             : <span className="text-muted-foreground">Pick…</span>}
@@ -141,19 +164,12 @@ export function FilterBar({
                 </>
             )}
 
-            {/* MTY All Months current month picker */}
+            {/* MTY All Months: no month picker — all available months shown */}
             {viewMode === "mty-all" && (
-                <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Current Month</label>
-                    <Select value={curMonth} onValueChange={m => {
-                        const idx = MONTH_ORDER.indexOf(m as any);
-                        onMonthsChange(MONTH_ORDER.slice(0, idx + 1).filter(x => availableMonths.includes(x)));
-                    }}>
-                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent {...scProps}>
-                            {availableMonths.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                <div className="flex items-end pb-1">
+                    <span className="text-xs text-muted-foreground font-medium">
+                        Showing all {availableMonths.length} month{availableMonths.length !== 1 ? "s" : ""}
+                    </span>
                 </div>
             )}
         </div>

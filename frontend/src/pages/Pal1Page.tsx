@@ -4,13 +4,13 @@ import { TrendChart } from "@/components/TrendChart";
 import { DetailedBreakdown } from "@/components/DetailedBreakdown";
 import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
 import { api } from "@/api";
-import { buildLedgerData, getVal } from "@/lib/pivot";
+import { buildLedgerData, getVal, aggVal } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
 
-interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; }
+interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
-export function Pal1Page({ months, viewMode, prevMonths }: Props) {
+export function Pal1Page({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<any[]>([]);
     const [prevData, setPrevData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);   // all months for sparklines
@@ -23,9 +23,9 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
         setLoading(true);
         const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
-            api.pal1(months),
-            prevMonths.length ? api.pal1(prevMonths) : Promise.resolve({ data: [] }),
-            api.pal1(allMonths),
+            api.pal1(months, fy),
+            prevMonths.length ? api.pal1(prevMonths, fy) : Promise.resolve({ data: [] }),
+            api.pal1(allMonths, fy),
         ]).then(([r, p, all]) => {
             setData(r.data); setPrevData(p.data); setAllData(all.data);
             setLoading(false);
@@ -57,11 +57,35 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
         { title: "Total Expenses", lineItem: "Total Expns", deltaMode: "inverse" as const },
     ];
 
-    const trendOptions = ["Profit (A)", "NETT PROFIT", "Gross Profit"];
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => ({
-        month: m,
-        value: getVal(allData, "line_item", trendOption, m) ?? 0
-    }));
+    const comboItems = new Set([
+        "Sales",
+        "Op Stk",
+        "Purchase-RM",
+        "Purchase-Trading",
+        "Purchase Yarn",
+        "Purchase-Fabric+ Cons",
+        "Cl Stk",
+    ]);
+    const trendOptions = [
+        "Profit (A)",
+        "NETT PROFIT",
+        "Gross Profit",
+        "Sales",
+        "Op Stk",
+        "Purchase-RM",
+        "Purchase-Trading",
+        "Purchase Yarn",
+        "Purchase-Fabric+ Cons",
+        "Cl Stk",
+    ];
+    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
+        const row = allData.find(r => r.line_item === trendOption && r.month === m);
+        const value = row?.value ?? 0;
+        const qty = row?.qty ?? 0;
+        const rate = row?.rate ?? (qty ? value / qty : 0);
+        return { month: m, value, qty, rate };
+    });
+    const useCombo = comboItems.has(trendOption);
 
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
@@ -72,16 +96,24 @@ export function Pal1Page({ months, viewMode, prevMonths }: Props) {
                         title={`${trendOption} Trend`}
                         data={trendData}
                         dataKey="value"
+                        combo={useCombo}
+                        barKey={useCombo ? "value" : undefined}
+                        lineKey={useCombo ? "rate" : undefined}
+                        qtyKey={useCombo ? "qty" : undefined}
                         options={trendOptions}
                         selectedOption={trendOption}
                         onOptionChange={setTrendOption}
                         rupee
+                        barRupee
+                        lineRupee
                     />
                 </div>
                 <HeroMetricsPanel
                     metrics={HERO_CARDS.map(m => ({
                         title: m.title,
-                        value: g(m.lineItem),
+                        value: viewMode === "single"
+                            ? g(m.lineItem)
+                            : aggVal(data, "line_item", m.lineItem, months),
                         prevValue: gp(m.lineItem),
                         history: hist(m.lineItem),
                         rupee: true,
