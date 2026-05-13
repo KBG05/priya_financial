@@ -16,6 +16,7 @@ export const api = {
     mty: (months: string[], fy?: string) => get<{ data: any[] }>("/mty", { months: months.join(","), ...(fy ? { fy } : {}) }),
     consumption: (months: string[], fy?: string) => get<{ data: any[] }>("/consumption", { months: months.join(","), ...(fy ? { fy } : {}) }),
     kpis: (months: string[], fy?: string) => get<{ data: any[] }>("/kpis", { months: months.join(","), ...(fy ? { fy } : {}) }),
+    kpisAggregate: (months: string[], fy?: string) => get<{ data: Record<string, number | null> }>("/kpis/aggregate", { months: months.join(","), ...(fy ? { fy } : {}) }),
     directExpenses: (months: string[], fy?: string) => get<{ data: any[] }>("/direct_expenses", { months: months.join(","), ...(fy ? { fy } : {}) }),
     contribution: (months: string[], fy?: string) => get<{ data: any[] }>("/contribution", { months: months.join(","), ...(fy ? { fy } : {}) }),
     uploadAndProcess: async (params: {

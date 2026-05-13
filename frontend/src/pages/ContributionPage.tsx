@@ -26,6 +26,7 @@ interface ContribRow {
     selling_price_per_kg: number;
     rm_price: number;
     filament_conversion: number;
+    fabric_cost: number;
     fabrication_per_kg: number;
     mts_per_kg: number;
     contribution_per_kg: number;
@@ -51,6 +52,7 @@ const COLUMNS: { key: SortKey; label: string; right?: boolean; rupee?: boolean; 
     { key: "selling_price_per_kg",label: "Selling Price / kg",        right: true },
     { key: "rm_price",            label: "RM Price / kg",             right: true },
     { key: "filament_conversion", label: "Filament Conversion / kg",  right: true },
+    { key: "fabric_cost",         label: "Fabric Cost / kg",          right: true },
     { key: "fabrication_per_kg",  label: "Fabrication / kg",         right: true },
     { key: "contribution_per_kg", label: "Contribution / kg",         right: true, highlight: true },
     { key: "sales_mtrs",          label: "Sales (Metres)",            right: true },
@@ -446,6 +448,7 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
                                         <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap ${D}`}>{fmt(r.selling_price_per_kg)}</td>
                                         <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap text-muted-foreground ${D}`}>{fmt(r.rm_price)}</td>
                                         <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap text-muted-foreground ${D}`}>{fmt(r.filament_conversion)}</td>
+                                        <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap text-muted-foreground ${D}`}>{fmt(r.fabric_cost)}</td>
                                         <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap text-muted-foreground ${D}`}>{fmt(r.fabrication_per_kg)}</td>
                                         <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap font-semibold ${D} ${neg ? "text-destructive" : "text-primary"}`}>
                                             {fmt(r.contribution_per_kg)}

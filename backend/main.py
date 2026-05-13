@@ -139,6 +139,34 @@ def get_kpis(months: str = Query(...), fy: str = Query(FY)):
     }
 
 
+@app.get("/kpis/aggregate")
+def get_kpis_aggregate(months: str = Query(...), fy: str = Query(FY)):
+    """Return the 4 profitability KPIs aggregated (summed) over the given months."""
+    ph, params = _months(months)
+    rows = query(
+        f"""SELECT line_item, SUM(value) AS total
+            FROM mty_{fy}
+            WHERE month IN ({ph})
+              AND line_item IN ('TOTAL SALES->', 'Gross Profit', 'EBITDA', 'Nett Profit')
+            GROUP BY line_item""",
+        params,
+    )
+    sums = {r["line_item"]: (r["total"] or 0) for r in rows}
+    sales = sums.get("TOTAL SALES->", 0)
+
+    def pct(x: float):
+        return round(x / sales * 100, 2) if sales else None
+
+    return {
+        "data": {
+            "Gross margin": pct(sums.get("Gross Profit", 0)),
+            "EBITDA": pct(sums.get("EBITDA", 0)),
+            "Net Margin": pct(sums.get("Nett Profit", 0)),
+            "Revenue growth": None,
+        }
+    }
+
+
 @app.get("/direct_expenses")
 def get_direct_expenses(months: str = Query(...), fy: str = Query(FY)):
     ph, params = _months(months)
@@ -158,7 +186,7 @@ def get_contribution(months: str = Query(...), fy: str = Query(FY)):
         "data": query(
             f"""SELECT month, product_id, product_name,
                 qty, revenue, selling_price_per_kg,
-                rm_price, filament_conversion, fabrication_per_kg, mts_per_kg,
+                rm_price, filament_conversion, fabric_cost, fabrication_per_kg, mts_per_kg,
                 contribution_per_kg, sales_mtrs, contribution_value
             FROM contribution_{fy}
             WHERE month IN ({ph})

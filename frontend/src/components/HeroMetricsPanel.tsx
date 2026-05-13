@@ -98,7 +98,7 @@ export function HeroMetricsPanel({ metrics }: Props) {
             </div>
 
             {view === "cards" ? (
-                /* ── Card View (existing) ── */
+                /* ── Card View ── */
                 <div className="flex flex-col gap-3">
                     {metrics.map(m => (
                         <MetricCard

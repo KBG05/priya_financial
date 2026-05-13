@@ -68,6 +68,7 @@ def _create_table(conn, fy: str) -> None:
             selling_price_per_kg REAL,
             rm_price             REAL,
             filament_conversion  REAL,
+            fabric_cost          REAL,
             fabrication_per_kg   REAL,
             mts_per_kg           REAL,
             contribution_per_kg  REAL,
@@ -96,27 +97,42 @@ def _rm_price(conn, fy: str, month: str) -> float:
 
 def _filament_conversion(conn, fy: str, month: str) -> float:
     """
-    Filament conversion cost per kg of finished goods for the given month.
+    Filament conversion cost per kg of RM consumed.
 
-    = (Variable-Yarn Cost + Fixed Cost from mty) / SUM(FG qty from inventory_sales)
+    = Variable-Yarn Cost (from mty) / SUM(RM consumption qty from consumption_output)
     """
     var_yarn = _q1(
         conn,
         f"SELECT value FROM mty_{fy} WHERE line_item = 'Variable-Yarn Cost' AND month = %s",
         (month,),
     )
-    fixed = _q1(
+    monofil_qty = _q1(
         conn,
-        f"SELECT value FROM mty_{fy} WHERE line_item = 'Fixed Cost' AND month = %s",
+        f"""SELECT SUM(qty) FROM consumption_output_{fy}
+            WHERE material = 'Raw Material Consumption' AND month = %s""",
         (month,),
     )
-    fg_qty = _q1(
+    return var_yarn / monofil_qty if monofil_qty else 0.0
+
+
+def _fabric_cost(conn, fy: str, month: str) -> float:
+    """
+    Fabric cost per kg of RM consumed (display-only, not deducted from contribution).
+
+    = Variable-Fabric Cost (from mty) / SUM(RM consumption qty from consumption_output)
+    """
+    var_fabric = _q1(
         conn,
-        f"""SELECT SUM(qty) FROM inventory_sales_{fy}
-            WHERE category = 'FINISHED_GOODS' AND month = %s""",
+        f"SELECT value FROM mty_{fy} WHERE line_item = 'Variable-Fabric Cost' AND month = %s",
         (month,),
     )
-    return (var_yarn + fixed) / fg_qty if fg_qty else 0.0
+    monofil_qty = _q1(
+        conn,
+        f"""SELECT SUM(qty) FROM consumption_output_{fy}
+            WHERE material = 'Raw Material Consumption' AND month = %s""",
+        (month,),
+    )
+    return var_fabric / monofil_qty if monofil_qty else 0.0
 
 
 def calculate_contribution(
@@ -162,8 +178,9 @@ def calculate_contribution(
 
         rm = _rm_price(conn, fy, month)
         fc = _filament_conversion(conn, fy, month)
+        fb = _fabric_cost(conn, fy, month)
 
-        print(f"  [{month}] RM_PRICE={rm:.4f}  FILAMENT_CONV={fc:.4f}")
+        print(f"  [{month}] RM_PRICE={rm:.4f}  FILAMENT_CONV={fc:.4f}  FABRIC_COST={fb:.4f}")
 
         # JOIN item_sales with product_specification averaged by product_code.
         # Average base specs, then recompute derived fields from the averaged inputs.
@@ -227,11 +244,11 @@ def calculate_contribution(
             conn.execute(
                 f"""INSERT INTO contribution_{fy}
                     (product_id, product_name, month, qty, revenue, selling_price_per_kg,
-                     rm_price, filament_conversion, fabrication_per_kg, mts_per_kg,
+                     rm_price, filament_conversion, fabric_cost, fabrication_per_kg, mts_per_kg,
                      contribution_per_kg, sales_mtrs, contribution_value)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (pid, pname, month, qty, rev, sell_rate,
-                 rm, fc, fab_per_kg, mts_per_kg,
+                 rm, fc, fb, fab_per_kg, mts_per_kg,
                  contrib_per_kg, sales_mtrs, contrib_value),
             )
             inserted += 1

@@ -20,6 +20,7 @@ const HIGHLIGHT_KPIS = ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"
 
 export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
     const [allData, setAllData] = useState<any[]>([]); // all months for sparklines  
+    const [aggKpis, setAggKpis] = useState<Record<string, number | null>>({});
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Revenue growth");
     const cur = months[months.length - 1];
@@ -27,10 +28,16 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
 
     useEffect(() => {
         setLoading(true);
-        const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
-        // fetch all months for table + sparklines in one call
+        const allMonths = [...MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1)), "FY"];
+        // fetch all months + FY row for table and sparklines
         api.kpis(allMonths, fy).then(r => { setAllData(r.data); setLoading(false); });
     }, [months.join(","), prevMonths.join(",")]);
+
+    useEffect(() => {
+        if (viewMode === "single") { setAggKpis({}); return; }
+        // For quarterly/mty-all: compute hero KPI values for the selected range
+        api.kpisAggregate(months, fy).then(r => setAggKpis(r.data));
+    }, [viewMode, months.join(","), fy]);
 
     if (loading) return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
@@ -73,11 +80,11 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
                 <HeroMetricsPanel
                     metrics={HIGHLIGHT_KPIS.map(name => ({
                         title: name,
-                        value: kv(name, cur),
-                        prevValue: kv(name, prev),
+                        value: viewMode !== "single" ? (aggKpis[name] ?? null) : kv(name, cur),
+                        prevValue: viewMode !== "single" ? kv(name, cur) : kv(name, prev),
                         history: sparkSeries(name),
                         pct: true,
-                        deltaMode: "default"
+                        deltaMode: "default",
                     }))}
                 />
             </div>

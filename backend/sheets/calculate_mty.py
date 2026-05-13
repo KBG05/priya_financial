@@ -1000,6 +1000,16 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             (month,),
         )
 
+        # Row 16 qty: RM sold (for monofil consumption qty calculation)
+        rm_sold_qty_for_monofil = _q1(
+            conn,
+            f"""
+            SELECT COALESCE(SUM(qty), 0) FROM inventory_sales_{fy_suffix}
+            WHERE month=%s AND category='RM_COST' AND product='RM Purchase for sales'
+        """,
+            (month,),
+        )
+
         if month == "Apr":
             op_stock_rm_qty = _q1(
                 conn,
@@ -1026,6 +1036,11 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             (month,),
         )
 
+        # Row 17 qty: Monofil Consumption qty = Op + Purchase - Cl - RM sold
+        monofil_consumption_qty = (
+            op_stock_rm_qty + purchase_rm_qty - cl_stock_rm_qty - rm_sold_qty_for_monofil
+        )
+
         qty_map = {
             "Sales Monofil From Production": sales_monofil_prod_qty,
             "Sales Monofil from Trading Fabric": trading_fabric_qty,
@@ -1035,6 +1050,7 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             "Op stock RM": op_stock_rm_qty,
             "Cl Stock RM": cl_stock_rm_qty,
             "Purchase RM": purchase_rm_qty,
+            "Monofil Consumption": monofil_consumption_qty,
             "Monofil Purchase Yarn": monofil_purchase_yarn_qty,
             "Monofil Purchase Fabric": monofil_purchase_fabric_qty,
             "Trading Purchase": trading_purchase_qty,

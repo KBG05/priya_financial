@@ -69,27 +69,25 @@ export function FilterBar({
 
     return (
         <div className="flex flex-wrap items-end gap-3 p-4 bg-card card-elevated rounded-xl">
-            {/* Fiscal Year */}
-            {availableFYs.length > 1 && (
-                <>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
-                        <Select value={fy} onValueChange={onFyChange}>
-                            <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent {...scProps}>
-                                {availableFYs.map(f => (
-                                    <SelectItem key={f} value={f}>
-                                        FY {f.replace("_", "-")}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
-                </>
-            )}
+            {/* Fiscal Year — always visible */}
+            <>
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
+                    <Select value={fy} onValueChange={onFyChange}>
+                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent {...scProps}>
+                            {availableFYs.map(f => (
+                                <SelectItem key={f} value={f}>
+                                    FY {f.replace("_", "-")}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
+            </>
             {/* View Mode */}
             <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">View</label>

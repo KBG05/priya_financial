@@ -86,6 +86,18 @@ def calculate_kpis(conn, fy_suffix):
 
     records = []
 
+    # FY-aggregate accumulators (weighted numerator/denominator sums)
+    fy_acc = {
+        "gross_profit": 0.0, "ebitda": 0.0, "net_profit": 0.0, "total_sales": 0.0,
+        "dio_num": 0.0, "cogs_total": 0.0,
+        "dso_num": 0.0, "dpo_num": 0.0,
+        "current_assets": 0.0, "current_liab": 0.0,
+        "quick_num": 0.0,
+        "debt_cov_den": 0.0, "int_cov_den": 0.0,
+        "last_loans_liability": 0.0, "last_capital_account": 0.0,
+        "last_cash": 0.0, "last_bank": 0.0,
+    }
+
     for i, month in enumerate(months):
         print(f"  Processing {month}...")
         prev_month = months[i - 1] if i > 0 else None
@@ -293,8 +305,64 @@ def calculate_kpis(conn, fy_suffix):
             "EV (Enterprise Value)": ev,
         }
 
+        # Accumulate FY totals
+        fy_acc["gross_profit"] += gross_profit
+        fy_acc["ebitda"] += ebitda
+        fy_acc["net_profit"] += net_profit
+        fy_acc["total_sales"] += total_sales
+        fy_acc["dio_num"] += avg_stock * days
+        fy_acc["cogs_total"] += cogs_total
+        fy_acc["dso_num"] += sundry_debtors * days
+        fy_acc["dpo_num"] += sundry_creditors * days
+        fy_acc["current_assets"] += current_assets
+        fy_acc["current_liab"] += current_liab
+        fy_acc["quick_num"] += (current_assets - closing_stock - loans_advances)
+        fy_acc["debt_cov_den"] += loans_liability + finance_costs
+        fy_acc["int_cov_den"] += finance_costs
+        fy_acc["last_loans_liability"] = loans_liability
+        fy_acc["last_capital_account"] = capital_account
+        fy_acc["last_cash"] = cash_in_hand
+        fy_acc["last_bank"] = bank_accounts
+
         for k, v in kpis.items():
             records.append((k, month, v))
+
+    # ── FY Aggregate rows (month = 'FY') ─────────────────────────────────────
+    fy_gross_margin    = round(safe_divide(fy_acc["gross_profit"], fy_acc["total_sales"]) * 100.0, 2)
+    fy_ebitda_margin   = round(safe_divide(fy_acc["ebitda"],       fy_acc["total_sales"]) * 100.0, 2)
+    fy_net_margin      = round(safe_divide(fy_acc["net_profit"],   fy_acc["total_sales"]) * 100.0, 2)
+    fy_dio             = round(safe_divide(fy_acc["dio_num"],      fy_acc["cogs_total"]),  2)
+    fy_dso             = round(safe_divide(fy_acc["dso_num"],      fy_acc["total_sales"]), 2)
+    fy_dpo             = round(safe_divide(fy_acc["dpo_num"],      fy_acc["total_sales"]), 2)
+    fy_ccc             = round(fy_dio + fy_dso - fy_dpo, 2)
+    fy_current_ratio   = round(safe_divide(fy_acc["current_assets"], fy_acc["current_liab"]),   2)
+    fy_quick_ratio     = round(safe_divide(fy_acc["quick_num"],      fy_acc["current_liab"]),   2)
+    fy_debt_equity     = round(safe_divide(fy_acc["last_loans_liability"], fy_acc["last_capital_account"]), 2)
+    fy_debt_coverage   = round(safe_divide(fy_acc["ebitda"], fy_acc["debt_cov_den"]), 2)
+    fy_interest_cov    = round(safe_divide(fy_acc["ebitda"], fy_acc["int_cov_den"]),  2)
+    fy_ev              = round(
+        fy_acc["last_capital_account"] + fy_acc["last_loans_liability"]
+        - fy_acc["last_cash"] - fy_acc["last_bank"], 2
+    )
+
+    fy_kpis = {
+        "Revenue growth":                   None,   # MoM % — not aggregable as FY sum
+        "Gross margin":                     fy_gross_margin,
+        "EBITDA":                           fy_ebitda_margin,
+        "Net Margin":                       fy_net_margin,
+        "CCC (cash conversion cycle)":      fy_ccc,
+        "DIO (Days Inventory Outstanding)": fy_dio,
+        "DSO (Days sales Outstanding)":     fy_dso,
+        "DPO (Days Payable Outstanding)":   fy_dpo,
+        "Current Ratio":                    fy_current_ratio,
+        "Quick Ratio":                      fy_quick_ratio,
+        "Debt Equity":                      fy_debt_equity,
+        "Debt Coverage":                    fy_debt_coverage,
+        "Interest Coverage":                fy_interest_cov,
+        "EV (Enterprise Value)":            fy_ev,
+    }
+    for k, v in fy_kpis.items():
+        records.append((k, "FY", v))
 
     conn.executemany(
         f"""

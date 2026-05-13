@@ -31,7 +31,9 @@ export function GroupedKpiTable({ groups, allData, months, viewMode, curMonth, c
     } else {
         cols = months.map(m => ({ key: m, header: m }));
         if (viewMode === "quarterly") {
-            cols.push({ key: "q_total", header: "Qtr Total", isTotal: true });
+            cols.push({ key: "q_total", header: "Qtr Avg", isTotal: true });
+        } else if (viewMode === "mty-all") {
+            cols.push({ key: "FY", header: "FY Total", isTotal: true });
         }
     }
 
