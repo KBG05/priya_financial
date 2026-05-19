@@ -66,6 +66,14 @@ def _months(months_param: str) -> tuple[List[str], dict]:
     return placeholders, params
 
 
+def _table_exists(table_name: str) -> bool:
+    row = query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=:t",
+        {"t": table_name},
+    )
+    return bool(row)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "fy": FY}
@@ -130,10 +138,16 @@ def get_consumption(months: str = Query(...), fy: str = Query(FY)):
 
 @app.get("/kpis")
 def get_kpis(months: str = Query(...), fy: str = Query(FY)):
+    table_name = f"kpis_{fy}"
+    if not _table_exists(table_name):
+        return {
+            "data": [],
+            "warning": "KPI data is not available for this year yet."
+        }
     ph, params = _months(months)
     return {
         "data": query(
-            f"SELECT month, kpi_name, value FROM kpis_{fy} WHERE month IN ({ph})",
+            f"SELECT month, kpi_name, value FROM {table_name} WHERE month IN ({ph})",
             params,
         )
     }
@@ -241,6 +255,31 @@ async def upload_and_process(
         bal_bytes = await balance_file.read()
         balance_path = _save_upload(balance_file, "balance", bal_bytes)
 
+    balance_warnings: list[str] = []
+    if balance_path is not None:
+        try:
+            import openpyxl
+
+            wb = openpyxl.load_workbook(balance_path, read_only=True, data_only=True)
+            sheet_names = wb.sheetnames
+            wb.close()
+
+            has_mis = "Balance Sheet" in sheet_names
+            has_bs = any(
+                name.upper().startswith("BS") and "APR" not in name.upper()
+                for name in sheet_names
+            )
+            if not (has_mis or has_bs):
+                balance_warnings.append(
+                    "Balance Sheet file not detected; skipping Balance Sheet and KPI steps."
+                )
+                balance_path = None
+        except Exception:
+            balance_warnings.append(
+                "Balance Sheet file could not be read; skipping Balance Sheet and KPI steps."
+            )
+            balance_path = None
+
     item_sales_path: Optional[Path] = None
     if item_sales_file and item_sales_file.filename:
         is_bytes = await item_sales_file.read()
@@ -267,7 +306,11 @@ async def upload_and_process(
           f"months={selected_months or 'all'}")
     print(f"{'='*64}")
 
+    for warning in balance_warnings:
+        log_buf.write(f"[WARN] {warning}\n")
+
     ok = False
+    user_message = ""
     try:
         with redirect_stdout(log_buf), redirect_stderr(log_buf):
             run_pipeline(
@@ -279,8 +322,11 @@ async def upload_and_process(
                 replace_existing=replace_existing,
             )
         ok = True
-    except Exception:
+    except BaseException as exc:
         log_buf.write(traceback.format_exc())
+        user_message = (
+            "Upload failed. Please verify the selected files and month, then try again."
+        )
 
     logs = log_buf.getvalue()
     # Echo full pipeline output to server console
@@ -288,4 +334,4 @@ async def upload_and_process(
         print(f"  {line}")
     print(f"[PIPELINE] {'✅ done' if ok else '❌ failed'}")
 
-    return {"ok": ok, "logs": logs}
+    return {"ok": ok, "logs": logs, "user_message": user_message or None}

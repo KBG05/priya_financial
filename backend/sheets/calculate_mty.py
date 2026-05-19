@@ -122,6 +122,18 @@ def _q_ytd(conn, sql, months_to_date):
     return safe_float(row[0]) if row else 0.0
 
 
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
 def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
     """
     Calculate MTY values for all available months cumulatively.
@@ -135,7 +147,14 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
     from pathlib import Path
 
     table_name = f"mty_{fy_suffix}"
+    # Clear any aborted transaction before DDL
+    try:
+        conn.rollback()
+    except Exception:
+        pass
     create_mty_table(conn, fy_suffix)
+    if not _table_exists(conn, table_name):
+        create_mty_table(conn, fy_suffix)
     conn.execute(f"DELETE FROM {table_name}")
     wb_src = None
     ws_dir = None

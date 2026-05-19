@@ -48,6 +48,18 @@ from typing import Optional
 from .db import MONTHS, get_connection
 
 
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
 def _q1(conn, sql: str, params=()):
     """Return first column of first row, or 0.0 if no rows."""
     rows = conn.execute(sql, params).fetchall()
@@ -150,10 +162,15 @@ def calculate_contribution(
     months : Optional list of month strings to restrict processing.
              If None, all months found in item_sales_{fy} are processed.
     """
+    item_sales_table = f"item_sales_{fy}"
+    if not _table_exists(conn, item_sales_table):
+        print(f"  ⚠  {item_sales_table} not found — contribution calculation skipped")
+        return
+
     _create_table(conn, fy)
 
     # Get distinct months available in item_sales
-    rows = conn.execute(f"SELECT DISTINCT month FROM item_sales_{fy}").fetchall()
+    rows = conn.execute(f"SELECT DISTINCT month FROM {item_sales_table}").fetchall()
     available = [r[0] for r in rows]
 
     if not available:

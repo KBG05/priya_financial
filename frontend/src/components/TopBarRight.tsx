@@ -140,7 +140,9 @@ export function TopBarRight({ fy, availableFYs }: Props) {
         setStatus("running");
         setLogs("");
         try {
-            const balanceFile = balMode === "Same as core" ? coreFile : balFile;
+            const balanceFile = balMode === "Same as core"
+                ? (coreMode === "MIS File" ? coreFile : null)
+                : balFile;
             const res = await api.uploadAndProcess({
                 coreFile,
                 balanceFile,
@@ -150,10 +152,15 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                 months: selectedMonth === "__all__" ? "" : selectedMonth,
                 replaceExisting,
             });
-            setLogs(res.logs + (res.error ? `\n\nError: ${res.error}` : ""));
-            setStatus(res.ok ? "ok" : "error");
+            if (res.ok) {
+                setLogs(res.logs);
+                setStatus("ok");
+            } else {
+                setLogs(res.user_message || "Upload failed. Please check the files and try again.");
+                setStatus("error");
+            }
         } catch (e: any) {
-            setLogs(e?.message || "Request failed");
+            setLogs("Upload failed. Please check the files and try again.");
             setStatus("error");
         }
     };

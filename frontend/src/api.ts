@@ -38,6 +38,6 @@ export const api = {
         form.append("replace_existing", String(params.replaceExisting ?? false));
         const res = await fetch(`${BASE}/upload-and-process`, { method: "POST", body: form });
         if (!res.ok) throw new Error("Upload & process failed");
-        return res.json() as Promise<{ ok: boolean; logs: string; error?: string }>;
+        return res.json() as Promise<{ ok: boolean; logs: string; error?: string; user_message?: string | null }>;
     },
 };
