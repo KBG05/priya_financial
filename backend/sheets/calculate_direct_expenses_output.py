@@ -143,36 +143,53 @@ def calculate_direct_expenses_output(conn, fy_suffix: str,
     mis_values = {}
     if filepath is not None and filepath.exists():
         wb_src = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-        ws_src = wb_src['Direct Expns']
+        is_mis = 'MTY' in wb_src.sheetnames or 'Balance Sheet' in wb_src.sheetnames
+        if 'Direct Expns' in wb_src.sheetnames:
+            ws_src = wb_src['Direct Expns']
+        else:
+            ws_src = None
         
-        # Find which column corresponds to which month mapping
-        var_month_cols = {}
-        for c in range(19, 31):
-            month_val = ws_src.cell(row=3, column=c).value
-            if month_val:
-                var_month_cols[c] = str(month_val).strip()
+        if ws_src is not None:
+            # Find which column corresponds to which month mapping
+            var_month_cols = {}
+            for c in range(19, 31):
+                month_val = ws_src.cell(row=3, column=c).value
+                if month_val:
+                    var_month_cols[c] = str(month_val).strip()
         
-        # Look for the relevant rows matching our required values
-        target_labels = {
-            'Wages-Fabric': 'Wages-Fabric',
-            'Wages-Inspection & Dispatch': 'Wages-Inspection',
-            'Wages-Yarn': 'Wages-Yarn',
-            'Salaries Office': 'Salaries Office',
-            'Variable-Trading': 'Variable-Trading'
-        }
-        
-        for r in range(1, 60):
-            label = ws_src.cell(row=r, column=18).value
-            if label and isinstance(label, str):
-                label_clean = label.strip()
-                if label_clean in target_labels:
-                    key_prefix = target_labels[label_clean]
-                    for col_idx, m in var_month_cols.items():
-                        val = ws_src.cell(row=r, column=col_idx).value
-                        mis_values[f"{key_prefix}_{m}"] = float(val) if val else 0.0
-                        
+            # Look for the relevant rows matching our required values
+            target_labels = {
+                'Wages-Fabric': 'Wages-Fabric',
+                'Wages-Inspection & Dispatch': 'Wages-Inspection',
+                'Wages-Yarn': 'Wages-Yarn',
+                'Salaries Office': 'Salaries Office',
+                'Variable-Trading': 'Variable-Trading'
+            }
+            
+            for r in range(1, 60):
+                label = ws_src.cell(row=r, column=18).value
+                if label and isinstance(label, str):
+                    label_clean = label.strip()
+                    if label_clean in target_labels:
+                        key_prefix = target_labels[label_clean]
+                        for col_idx, m in var_month_cols.items():
+                            val = ws_src.cell(row=r, column=col_idx).value
+                            mis_values[f"{key_prefix}_{m}"] = float(val) if val else 0.0
+            
+            # Fallback: Sales & Exp file uses row 35, cols S-AD for Variable-Trading
+            if not is_mis and not any(k.startswith("Variable-Trading_") for k in mis_values.keys()):
+                month_order = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+                for idx, m in enumerate(month_order):
+                    col = 19 + idx  # S=19
+                    val = ws_src.cell(row=35, column=col).value
+                    if val is not None:
+                        mis_values[f"Variable-Trading_{m}"] = float(val) if val else 0.0
+
+            print(f"  Read Wages/Salaries/Variable-Trading from source: {filepath.name}")
+        else:
+            print("  ⚠  Direct Expns sheet not found in MIS file; using DB defaults")
+
         wb_src.close()
-        print(f"  Read Wages/Salaries/Variable-Trading from source: {filepath.name}")
     
     # Get all months from direct_expenses table to ensure we process all available months
     cursor = conn.execute(f"SELECT DISTINCT month FROM {direct_table} ORDER BY month")

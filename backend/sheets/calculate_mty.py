@@ -159,6 +159,11 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
     wb_src = None
     ws_dir = None
     dir_value_cols = {}
+    dir_row_map = {
+        "Variable-Trading": 48,
+        "Variable-Finance": 49,
+        "Interest USL": 58,
+    }
     mis_mty_sales = {}  # (month) -> {'prod': val, 'trading_fabric': val}
 
     # Load MIS file if provided for ws_dir (Variable-Finance/Interest rows) and MTY sales rows
@@ -167,28 +172,41 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         if _fp.exists():
             import openpyxl as _opx
             wb_src = _opx.load_workbook(_fp, read_only=True, data_only=True)
-            # Direct Expns sheet: rows 48/49/58 for Variable-Trading, Variable-Finance, Interest
-            ws_dir = wb_src['Direct Expns']
-            for c in range(19, 31):
-                m = ws_dir.cell(row=3, column=c).value
-                if m:
-                    dir_value_cols[str(m).strip()] = c
-            # MTY sheet: rows 3 (Production) and 5 (Trading Fabric) value columns
-            ws_mty = wb_src['MTY']
-            for c in range(1, ws_mty.max_column + 1):
-                h = ws_mty.cell(row=2, column=c).value
-                if isinstance(h, str) and h.strip() in [
-                    'Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'
-                ]:
-                    val_col = c + 1
-                    m = h.strip()
-                    prod = ws_mty.cell(row=3, column=val_col).value
-                    trad = ws_mty.cell(row=5, column=val_col).value
-                    mis_mty_sales[m] = {
-                        'prod': float(prod) if prod else 0.0,
-                        'trading_fabric': float(trad) if trad else 0.0,
+            # Direct Expns sheet: rows 48/49/58 for MIS, 37/38/47 for Sales & Expns
+            if 'Direct Expns' in wb_src.sheetnames:
+                ws_dir = wb_src['Direct Expns']
+                for c in range(19, 31):
+                    m = ws_dir.cell(row=3, column=c).value
+                    if m:
+                        dir_value_cols[str(m).strip()] = c
+                if 'MTY' not in wb_src.sheetnames:
+                    dir_row_map = {
+                        "Variable-Trading": 37,
+                        "Variable-Finance": 38,
+                        "Interest USL": 47,
                     }
-            print(f"  Loaded MIS file for MTY: {_fp.name}")
+            else:
+                ws_dir = None
+
+            # MTY sheet: rows 3 (Production) and 5 (Trading Fabric) value columns
+            if 'MTY' in wb_src.sheetnames:
+                ws_mty = wb_src['MTY']
+                for c in range(1, ws_mty.max_column + 1):
+                    h = ws_mty.cell(row=2, column=c).value
+                    if isinstance(h, str) and h.strip() in [
+                        'Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'
+                    ]:
+                        val_col = c + 1
+                        m = h.strip()
+                        prod = ws_mty.cell(row=3, column=val_col).value
+                        trad = ws_mty.cell(row=5, column=val_col).value
+                        mis_mty_sales[m] = {
+                            'prod': float(prod) if prod else 0.0,
+                            'trading_fabric': float(trad) if trad else 0.0,
+                        }
+                print(f"  Loaded MIS file for MTY: {_fp.name}")
+            else:
+                print("  ⚠  MTY sheet not found in file; using DB formulas")
 
     print(f"\n[MTY CALCULATION] Calculating for FY {fy_suffix}...")
 
@@ -620,7 +638,7 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         # Row 30: Variable-Trading
         # User requested category 'Other Expenses' for Variable-Trading
         if ws_dir is not None and month in dir_value_cols:
-            trading_var = safe_float(ws_dir.cell(48, dir_value_cols[month]).value)
+            trading_var = safe_float(ws_dir.cell(dir_row_map["Variable-Trading"], dir_value_cols[month]).value)
         else:
             trading_var = _q1(
                 conn,
@@ -634,18 +652,16 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Variable-Trading"] = trading_var
 
         # Row 31: Variable-Finance
-        if ws_dir is not None and month in dir_value_cols:
-            finance_var = safe_float(ws_dir.cell(49, dir_value_cols[month]).value)
-        else:
-            finance_var = _q1(
-                conn,
-                f"""
-                SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
-                WHERE month=%s AND category='Variable & Direct Expense'
-                AND particulars IN ('Working Capital-Bank Charges', 'Working Capital-LC', 'Working Capital-OCC')
-            """,
-                (month,),
-            )
+        # Always use DB to avoid Excel secondary-table double-counting of OCC in Finance rows
+        finance_var = _q1(
+            conn,
+            f"""
+            SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
+            WHERE month=%s AND category='Variable & Direct Expense'
+            AND particulars IN ('Working Capital-Bank Charges', 'Working Capital-LC', 'Working Capital-OCC')
+        """,
+            (month,),
+        )
         d["Variable-Finance"] = finance_var
 
         yarn_processing = total_var_direct - fabric_cost - trading_var - finance_var
@@ -758,17 +774,15 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Deprnn"] = deprn
 
         # Row 43: Interest USL
-        if ws_dir is not None and month in dir_value_cols:
-            interest = safe_float(ws_dir.cell(58, dir_value_cols[month]).value)
-        else:
-            interest = _q1(
-                conn,
-                f"""
-                SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
-                WHERE month=%s AND particulars IN ('Finance Cost-Int On Deposits', 'Finance Cost-Int On Term Loan')
-            """,
-                (month,),
-            )
+        # Always use DB to avoid Excel secondary-table double-counting of OCC in Finance rows
+        interest = _q1(
+            conn,
+            f"""
+            SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
+            WHERE month=%s AND particulars IN ('Finance Cost-Int On Deposits', 'Finance Cost-Int On Term Loan')
+        """,
+            (month,),
+        )
         d["Interest USL"] = interest
 
         # ═══════════════════════════════════════════════════════

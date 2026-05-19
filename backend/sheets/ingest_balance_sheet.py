@@ -133,6 +133,9 @@ def _find_bs_single_month_sheet(wb) -> Optional[str]:
         upper = name.upper()
         if upper.startswith("BS") and "APR" not in upper:
             return name
+    # Also accept a sheet literally named 'Balance Sheet' used in standalone Tally exports
+    if "Balance Sheet" in wb.sheetnames:
+        return "Balance Sheet"
     return None
 
 
@@ -168,8 +171,16 @@ def _ingest_tally_format(conn, wb, table_name: str) -> int:
     current_liab_cat: Optional[str] = None
     current_asset_cat: Optional[str] = None
 
-    # Data rows: index 10-33 (rows 11-34), row 35 is "Total" — stop before it
-    for row in all_rows[10:34]:
+    # Scan all rows from row 11 onward; stop when a "Total" marker is found.
+    # (Row count varies by Tally export version — older files end at row 34,
+    #  newer Apr-26 files end at row 43.)
+    for row in all_rows[10:]:
+        # Stop at the "Total" summary row (present on both sides)
+        if row[0] and str(row[0]).strip().lower() == "total":
+            break
+        if row[3] and str(row[3]).strip().lower() == "total":
+            break
+
         # --- Left side: Liabilities (cols A=0, B=1, C=2) ---
         name_l = str(row[0]).strip() if row[0] not in (None, "") else None
         val_l_item = safe_float(row[1])   # line-item value
@@ -210,18 +221,24 @@ def _ingest_tally_format(conn, wb, table_name: str) -> int:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def ingest_balance_sheet(conn, filepath: Path, fy_suffix: str) -> int:
+def ingest_balance_sheet(conn, filepath: Path, fy_suffix: str, is_mis: bool | None = None) -> int:
     """
     Ingest balance sheet data from Excel file.
 
-    Auto-detects format:
-      - If workbook contains "Balance Sheet" sheet → MIS multi-month format
-      - Otherwise → BS_PL_CF Tally single-month format (BS_Mar26 / BS-Feb26 etc.)
+    Format selection (via is_mis):
+      - True  → MIS multi-month format ('Balance Sheet' sheet, month columns in row 2)
+      - False → Tally single-month format (standalone BS_PL_CF or 'Balance Sheet' sheet
+                with date range in row 8)
+      - None  → auto-detect: 'Balance Sheet' sheet present → MIS; otherwise Tally
+
+    Pass is_mis=True when the same file is used for both core and balance (MIS upload).
+    Pass is_mis=False when a separate standalone Tally BS file is uploaded.
 
     Args:
         conn: Database connection
         filepath: Path to Excel file
         fy_suffix: Fiscal year suffix (e.g., '25_26')
+        is_mis: Override format detection (True=MIS, False=Tally, None=auto)
 
     Returns:
         Number of records inserted
@@ -235,11 +252,18 @@ def ingest_balance_sheet(conn, filepath: Path, fy_suffix: str) -> int:
 
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
 
-    if "Balance Sheet" in wb.sheetnames:
-        print("  Format: MIS (multi-month)")
+    if is_mis is True:
+        print("  Format: MIS (multi-month, same-as-core upload)")
+        total = _ingest_mis_format(conn, wb, table_name)
+    elif is_mis is False:
+        print("  Format: Tally BS (single-month, separate file upload)")
+        total = _ingest_tally_format(conn, wb, table_name)
+    elif "Balance Sheet" in wb.sheetnames:
+        # Auto-detect fallback (CLI usage): 'Balance Sheet' sheet → MIS format
+        print("  Format: MIS (multi-month, auto-detected)")
         total = _ingest_mis_format(conn, wb, table_name)
     else:
-        print("  Format: Tally BS_PL_CF (single-month)")
+        print("  Format: Tally BS_PL_CF (single-month, auto-detected)")
         total = _ingest_tally_format(conn, wb, table_name)
 
     wb.close()

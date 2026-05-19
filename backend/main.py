@@ -145,12 +145,18 @@ def get_kpis(months: str = Query(...), fy: str = Query(FY)):
             "warning": "KPI data is not available for this year yet."
         }
     ph, params = _months(months)
-    return {
-        "data": query(
-            f"SELECT month, kpi_name, value FROM {table_name} WHERE month IN ({ph})",
-            params,
-        )
-    }
+    try:
+        return {
+            "data": query(
+                f"SELECT month, kpi_name, value FROM {table_name} WHERE month IN ({ph})",
+                params,
+            )
+        }
+    except Exception:
+        return {
+            "data": [],
+            "warning": "KPI data is not available for this year yet."
+        }
 
 
 @app.get("/kpis/aggregate")
@@ -255,6 +261,11 @@ async def upload_and_process(
         bal_bytes = await balance_file.read()
         balance_path = _save_upload(balance_file, "balance", bal_bytes)
 
+    # True = same file uploaded for core+balance (MIS); False = separate Tally BS file
+    balance_is_mis: bool | None = None
+    if balance_path is not None:
+        balance_is_mis = (core_bytes == bal_bytes)
+
     balance_warnings: list[str] = []
     if balance_path is not None:
         try:
@@ -320,6 +331,7 @@ async def upload_and_process(
                 item_sales_file=item_sales_path,
                 selected_months=selected_months,
                 replace_existing=replace_existing,
+                balance_is_mis=balance_is_mis,
             )
         ok = True
     except BaseException as exc:

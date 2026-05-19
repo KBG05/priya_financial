@@ -124,6 +124,7 @@ def run_pipeline(
     item_sales_file: Path | None = None,
     selected_months: list[str] | None = None,
     replace_existing: bool = False,
+    balance_is_mis: bool | None = None,
 ):
     sales_pur_file, mis_file = _prepare_input_dir(sales_pur_file, mis_file, selected_months)
     if item_sales_file and not item_sales_file.is_absolute():
@@ -192,7 +193,7 @@ def run_pipeline(
         # ── 6. Balance Sheet ───────────────────────────────────────────────
         if mis_file:
             print("\n[STEP 6] Ingesting Balance Sheet...")
-            ingest_balance_sheet(conn, mis_file, fy)
+            ingest_balance_sheet(conn, mis_file, fy, is_mis=balance_is_mis)
         else:
             print("\n[STEP 6] Balance Sheet — skipped (no --mis provided)")
 
@@ -216,11 +217,11 @@ def run_pipeline(
 
         # ── 9. Direct Expenses Output ──────────────────────────────────────
         print("\n[STEP 9] Calculating Direct Expenses Output...")
-        calculate_direct_expenses_output(conn, fy, filepath=mis_file)
+        calculate_direct_expenses_output(conn, fy, filepath=sales_pur_file)
 
         # ── 10. MTY ────────────────────────────────────────────────────────
         print("\n[STEP 10] Calculating MTY...")
-        calculate_mty(conn, fy, filepath=mis_file)
+        calculate_mty(conn, fy, filepath=sales_pur_file if sales_pur_file else mis_file)
 
         # ── 11. KPIs ───────────────────────────────────────────────────────
         if mis_file:
@@ -247,11 +248,14 @@ def run_pipeline(
             print("\n[STEP 11A] Item Sales — skipped (no --item-sales provided)")
 
         # ── 11B. Contribution Calculation ──────────────────────────────────
-        print("\n[STEP 11B] Calculating Contribution...")
-        if calculate_contribution is not None:
-            calculate_contribution(conn, fy, months=selected_months)
+        if item_sales_file:
+            print("\n[STEP 11B] Calculating Contribution...")
+            if calculate_contribution is not None:
+                calculate_contribution(conn, fy, months=selected_months)
+            else:
+                print("  ⚠  Contribution module not available; skipping")
         else:
-            print("  ⚠  Contribution module not available; skipping")
+            print("\n[STEP 11B] Contribution — skipped (no --item-sales provided)")
 
         # ── Apply month filter to output tables after calculations ─────────
         if selected_months:

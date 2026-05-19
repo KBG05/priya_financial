@@ -49,6 +49,11 @@ def _q(conn, sql, params=()):
 
 
 def calculate_kpis(conn, fy_suffix):
+    parts = fy_suffix.split("_")
+    prev_fy = None
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        prev_fy = f"{int(parts[0]) - 1:02d}_{int(parts[1]) - 1:02d}"
+
     table_name = f"kpis_{fy_suffix}"
     conn.execute(
         f"""
@@ -159,19 +164,25 @@ def calculate_kpis(conn, fy_suffix):
         )
 
         # 1. Revenue Growth
-        if month == "Apr":
-            # One-time override for FY25-26 per MIS KPI sheet
-            rev_growth = -10.5
+        if month == "Apr" and prev_fy:
+            try:
+                prev_total_sales = _q(
+                    conn,
+                    f"SELECT value FROM mty_{prev_fy} WHERE month=%s AND line_item='TOTAL SALES->'",
+                    ("Mar",),
+                )
+            except Exception:
+                prev_total_sales = 0.0
         else:
             prev_total_sales = _q(
                 conn,
                 f"SELECT value FROM mty_{fy_suffix} WHERE month=%s AND line_item='TOTAL SALES->'",
                 (prev_month,),
             )
-            rev_growth = round(
-                safe_divide((total_sales - prev_total_sales), prev_total_sales) * 100.0,
-                2,
-            )
+        rev_growth = round(
+            safe_divide((total_sales - prev_total_sales), prev_total_sales) * 100.0,
+            2,
+        )
 
         # 2. Gross Margin
         gross_margin = round(safe_divide(gross_profit, total_sales) * 100.0, 2)
