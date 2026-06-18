@@ -169,6 +169,7 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
     # Load MIS file if provided for ws_dir (Variable-Finance/Interest rows) and MTY sales rows
     if filepath is not None:
         _fp = Path(filepath) if not isinstance(filepath, Path) else filepath
+        print(f"  [MTY] Loading source file: {_fp} (exists={_fp.exists()})")
         if _fp.exists():
             import openpyxl as _opx
             wb_src = _opx.load_workbook(_fp, read_only=True, data_only=True)
@@ -200,9 +201,13 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
                         m = h.strip()
                         prod = ws_mty.cell(row=3, column=val_col).value
                         trad = ws_mty.cell(row=5, column=val_col).value
+                        if isinstance(prod, str) and prod.startswith('#'):
+                            print(f"  ⚠  MTY sheet row 3 col {val_col} ({m}) contains Excel error '{prod}' — treating as 0")
+                        if isinstance(trad, str) and trad.startswith('#'):
+                            print(f"  ⚠  MTY sheet row 5 col {val_col} ({m}) contains Excel error '{trad}' — treating as 0")
                         mis_mty_sales[m] = {
-                            'prod': float(prod) if prod else 0.0,
-                            'trading_fabric': float(trad) if trad else 0.0,
+                            'prod': safe_float(prod),
+                            'trading_fabric': safe_float(trad),
                         }
                 print(f"  Loaded MIS file for MTY: {_fp.name}")
             else:
@@ -636,29 +641,29 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Variable-Fabric Cost"] = fabric_cost
 
         # Row 30: Variable-Trading
-        # User requested category 'Other Expenses' for Variable-Trading
-        if ws_dir is not None and month in dir_value_cols:
-            trading_var = safe_float(ws_dir.cell(dir_row_map["Variable-Trading"], dir_value_cols[month]).value)
-        else:
-            trading_var = _q1(
-                conn,
-                f"""
-                SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
-                WHERE month=%s AND category='Other Expenses'
-                AND particulars='Variable-Trading'
-            """,
-                (month,),
-            )
+        # Always read from DB — the Direct Expns sheet row-48 mapping was designed for an
+        # older MIS layout; core.xlsx uses merged-cell labels so openpyxl reads the wrong
+        # row and returns trading-purchase totals instead of the trading variable expense.
+        trading_var = _q1(
+            conn,
+            f"""
+            SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
+            WHERE month=%s AND category='Other Expenses'
+            AND particulars='Variable-Trading'
+        """,
+            (month,),
+        )
         d["Variable-Trading"] = trading_var
 
         # Row 31: Variable-Finance
-        # Always use DB to avoid Excel secondary-table double-counting of OCC in Finance rows
+        # MIS MTY row 31 = Working Capital-OCC only.
+        # Working Capital-LC and Bank Charges are included in Interest USL (row 43), not here.
         finance_var = _q1(
             conn,
             f"""
             SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
             WHERE month=%s AND category='Variable & Direct Expense'
-            AND particulars IN ('Working Capital-Bank Charges', 'Working Capital-LC', 'Working Capital-OCC')
+            AND particulars='Working Capital-OCC'
         """,
             (month,),
         )
@@ -774,12 +779,18 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Deprnn"] = deprn
 
         # Row 43: Interest USL
-        # Always use DB to avoid Excel secondary-table double-counting of OCC in Finance rows
+        # MIS MTY row 43 ("Interest") = OCC + Int On Deposits + Int On Term Loan.
+        # OCC is already in Variable-Finance (row 31) for the Total Variable section,
+        # but the Excel also aggregates it here for the Finance Cost / Nett Profit section.
         interest = _q1(
             conn,
             f"""
             SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
-            WHERE month=%s AND particulars IN ('Finance Cost-Int On Deposits', 'Finance Cost-Int On Term Loan')
+            WHERE month=%s AND particulars IN (
+                'Working Capital-OCC',
+                'Finance Cost-Int On Deposits',
+                'Finance Cost-Int On Term Loan'
+            )
         """,
             (month,),
         )
@@ -917,9 +928,11 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         ebitda = ebit + deprn
         d["EBITDA"] = ebitda
 
-        # Row 70: Finance Cost = Variable-Finance + Interest USL
-        # Dec formula: =AA31+AA43
-        finance_cost = finance_var + interest
+        # Row 70: Finance Cost
+        # MIS MTY row 70 = row 43 (Interest USL) only — NOT Variable-Finance + Interest.
+        # Variable-Finance (OCC) is already counted in Total Variable (row 32);
+        # Finance Cost just re-states the total interest charge for the Nett Profit line.
+        finance_cost = interest
         d["Finance Cost"] = finance_cost
 
         # Row 71: Deprn (same as row 42/34)

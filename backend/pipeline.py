@@ -54,6 +54,10 @@ try:
     except ImportError:
         _ingest_item_sales = None
     try:
+        from .sheets.ingest_item_purchases import ingest_item_purchases as _ingest_item_purchases
+    except ImportError:
+        _ingest_item_purchases = None
+    try:
         from .sheets.calculate_contribution import calculate_contribution
     except ImportError:
         calculate_contribution = None
@@ -80,6 +84,10 @@ except ImportError:
         from sheets.ingest_item_sales import ingest_item_sales as _ingest_item_sales
     except ImportError:
         _ingest_item_sales = None
+    try:
+        from sheets.ingest_item_purchases import ingest_item_purchases as _ingest_item_purchases
+    except ImportError:
+        _ingest_item_purchases = None
     try:
         from sheets.calculate_contribution import calculate_contribution
     except ImportError:
@@ -159,6 +167,7 @@ def run_pipeline(
         f"direct_expenses_output_{fy}",
         f"mty_{fy}",
         f"item_sales_{fy}",
+        f"item_purchases_{fy}",
         f"contribution_{fy}",
     ] + ([f"kpis_{fy}"] if mis_file else [])
 
@@ -234,28 +243,30 @@ def run_pipeline(
         else:
             print("\n[STEP 11] KPIs — skipped (no --mis provided)")
 
-        # ── 11A. Item Sales Ingestion ──────────────────────────────────────
-        if item_sales_file:
-            if not selected_months:
-                print("\n[STEP 11A] --item-sales provided but --months not specified; skipping item sales")
-            elif _ingest_item_sales is None:
+        # ── 11A. Item Sales (from priya_textile) + Purchase Register (from Excel) ──
+        if selected_months:
+            if _ingest_item_sales is None:
                 print("\n[STEP 11A] Item Sales module not available; skipping")
             else:
-                print(f"\n[STEP 11A] Ingesting Item Sales ({item_sales_file.name}) for month(s): {selected_months}...")
+                print(f"\n[STEP 11A] Ingesting Item Sales from priya_textile for month(s): {selected_months}...")
                 for month in selected_months:
-                    _ingest_item_sales(conn, item_sales_file, fy, month)
+                    _ingest_item_sales(conn, fy, month)
+            if item_sales_file and _ingest_item_purchases is not None:
+                print(f"\n[STEP 11A-P] Ingesting Purchase Register ({item_sales_file.name}) for month(s): {selected_months}...")
+                for month in selected_months:
+                    _ingest_item_purchases(conn, item_sales_file, fy, month)
         else:
-            print("\n[STEP 11A] Item Sales — skipped (no --item-sales provided)")
+            print("\n[STEP 11A] Item Sales — skipped (no --months specified)")
 
         # ── 11B. Contribution Calculation ──────────────────────────────────
-        if item_sales_file:
+        if selected_months:
             print("\n[STEP 11B] Calculating Contribution...")
             if calculate_contribution is not None:
                 calculate_contribution(conn, fy, months=selected_months)
             else:
                 print("  ⚠  Contribution module not available; skipping")
         else:
-            print("\n[STEP 11B] Contribution — skipped (no --item-sales provided)")
+            print("\n[STEP 11B] Contribution — skipped (no --months specified)")
 
         # ── Apply month filter to output tables after calculations ─────────
         if selected_months:
@@ -274,9 +285,14 @@ def run_pipeline(
 
     except Exception as exc:
         conn.rollback()
-        print(f"\n❌  Pipeline FAILED: {exc}")
         import traceback
-        traceback.print_exc()
+        tb = traceback.format_exc()
+        print(f"\n❌  Pipeline FAILED: {type(exc).__name__}: {exc}")
+        print(f"\n--- Traceback ---\n{tb}--- End Traceback ---\n")
+        # Print a condensed cause chain for quick scanning in server logs
+        cause = exc.__cause__ or exc.__context__
+        if cause:
+            print(f"  Caused by: {type(cause).__name__}: {cause}")
         sys.exit(1)
     finally:
         conn.close()
