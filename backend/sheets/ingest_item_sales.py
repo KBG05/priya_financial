@@ -1,26 +1,33 @@
 """
-Ingest item-level monthly sales from priya_textile.Aggregated Data.
+Ingest item-level monthly sales into item_sales_{fy}.
 
-Source: priya_textile."Aggregated Data" table, grouped by ProductID per TimeID.
+PRIMARY SOURCE (preferred): Excel file with a sheet named "Sales" (case-insensitive).
+    Expected layout — row 5 is the header, data from row 6:
+        Col 0: CATEGORY
+        Col 1: Common Code  →  product_id
+        Col 2: PRODUCT
+        Col 3: COLOUR
+        Col 4: QTY MTR
+        Col 5: QTY KGS      →  qty
+        Col 6: VALUE         →  revenue
+    Multiple rows with the same Common Code are summed (different colours/specs).
 
-TimeID mapping for FY 25-26:  52=Apr  53=May  54=Jun  55=Jul  56=Aug  57=Sep
-                               58=Oct  59=Nov  60=Dec  61=Jan  62=Feb  63=Mar
-
-Sales realization is preserved as original:
-    selling_price_per_kg = SUM(Revenue) / SUM(Quantity)
-Purchases are NOT subtracted here — they are handled separately in
-ingest_item_purchases (fed into item_purchases_{fy}).
+FALLBACK SOURCE: priya_textile.Aggregated Data (legacy DB path, used when no file
+    is provided or the file has no "Sales" sheet).
 
 Target table: item_sales_{fy}
     product_id           INT
     month                TEXT
-    qty                  REAL   -- total sales qty from Tally invoices
+    qty                  REAL   -- total sales qty (kg)
     revenue              REAL   -- total sales revenue
-    selling_price_per_kg REAL   -- revenue / qty (original, unadjusted)
+    selling_price_per_kg REAL   -- revenue / qty
 
-Existing rows for the given month are deleted before re-inserting,
-so re-running for the same month is safe.
+Existing rows for the given month are deleted before re-inserting (idempotent).
 """
+
+from collections import defaultdict
+from pathlib import Path
+from typing import Optional
 
 import psycopg2
 
@@ -56,19 +63,107 @@ def _create_table(conn, fy: str) -> None:
     conn.commit()
 
 
-def ingest_item_sales(conn, fy: str, month: str) -> None:
+def _read_sales_from_excel(filepath: str | Path) -> Optional[dict[int, tuple[float, float]]]:
     """
-    Load sales for *month* from priya_textile.Aggregated Data into item_sales_{fy}.
+    Try to read item sales data from an Excel file that has a "Sales" sheet
+    (case-insensitive).  Returns {product_id: (total_qty_kg, total_revenue)} or
+    None if the sheet is absent.
 
-    Groups Quantity and Revenue by ProductID for the configured TimeID.
-    Only products with positive total Quantity are included.
+    Expected layout (matches '1.Apr 26 SKU Sales Purchase.xlsx'):
+        Row 5  — headers: CATEGORY | Common Code | PRODUCT | COLOUR | QTY MTR | QTY KGS | VALUE
+        Row 6+ — data rows; multiple rows per Common Code are summed.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    sheet_name = next((s for s in wb.sheetnames if s.lower() == "sales"), None)
+    if sheet_name is None:
+        wb.close()
+        return None
+
+    ws = wb[sheet_name]
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    # Find the header row: first row that contains "Common Code"
+    header_row = None
+    for i, row in enumerate(rows):
+        if any(str(c).strip().lower() == "common code" for c in row if c is not None):
+            header_row = i
+            break
+
+    if header_row is None:
+        print(f"  ⚠  'Sales' sheet found but no 'Common Code' header row detected")
+        return None
+
+    # Map header names to column indices
+    headers = [str(c).strip() if c is not None else "" for c in rows[header_row]]
+    try:
+        col_code = next(i for i, h in enumerate(headers) if h.lower() == "common code")
+        col_qty  = next(i for i, h in enumerate(headers) if h.lower() == "qty kgs")
+        col_rev  = next(i for i, h in enumerate(headers) if h.lower() == "value")
+    except StopIteration as e:
+        print(f"  ⚠  'Sales' sheet header missing expected column: {e}")
+        return None
+
+    totals: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0])
+    for row in rows[header_row + 1:]:
+        code = row[col_code] if col_code < len(row) else None
+        if code is None:
+            continue
+        try:
+            pid = int(code)
+        except (TypeError, ValueError):
+            continue
+        qty = float(row[col_qty] or 0) if col_qty < len(row) else 0.0
+        rev = float(row[col_rev] or 0) if col_rev < len(row) else 0.0
+        if qty <= 0:
+            continue
+        totals[pid][0] += qty
+        totals[pid][1] += rev
+
+    return {pid: (v[0], v[1]) for pid, v in totals.items()}
+
+
+def ingest_item_sales(conn, fy: str, month: str, filepath: Optional[str | Path] = None) -> None:
+    """
+    Load sales for *month* into item_sales_{fy}.
+
+    If *filepath* is provided and contains a "Sales" sheet, reads from there.
+    Otherwise falls back to the legacy priya_textile DB source.
 
     Parameters
     ----------
-    conn  : DB connection to priya_financial (returned by get_connection())
-    fy    : FY suffix, e.g. '25_26'
-    month : Three-letter month abbreviation, e.g. 'Mar'
+    conn     : DB connection to priya_financial (returned by get_connection())
+    fy       : FY suffix, e.g. '25_26'
+    month    : Three-letter month abbreviation, e.g. 'Mar'
+    filepath : Optional path to an Excel file with a "Sales" sheet
     """
+    _create_table(conn, fy)
+    conn.execute(f"DELETE FROM item_sales_{fy} WHERE month = %s", (month,))
+
+    # ── Try Excel "Sales" sheet first ─────────────────────────────────────
+    if filepath is not None:
+        product_data = _read_sales_from_excel(filepath)
+        if product_data is not None:
+            print(f"  [{month}] Reading item sales from Excel 'Sales' sheet "
+                  f"({Path(filepath).name})")
+            inserted = 0
+            for pid, (qty, rev) in product_data.items():
+                rate = rev / qty if qty else 0.0
+                conn.execute(
+                    f"""INSERT INTO item_sales_{fy}
+                            (product_id, month, qty, revenue, selling_price_per_kg)
+                        VALUES (%s, %s, %s, %s, %s)""",
+                    (pid, month, qty, rev, rate),
+                )
+                inserted += 1
+            print(f"  [{month}] Inserted {inserted} rows into item_sales_{fy} (from Excel)")
+            return
+        else:
+            print(f"  [{month}] No 'Sales' sheet in file — falling back to priya_textile DB")
+
+    # ── Fallback: priya_textile "Aggregated Data" ──────────────────────────
     time_id_map = FY_TIME_ID_MAP.get(fy)
     if not time_id_map:
         print(f"  ⚠  No TimeID mapping configured for FY {fy} — item_sales ingestion skipped")
@@ -100,10 +195,7 @@ def ingest_item_sales(conn, fy: str, month: str) -> None:
 
     print(f"  [{month}] Loaded {len(rows)} products from priya_textile TimeID={time_id}")
 
-    _create_table(conn, fy)
-
-    # Filter to manufactured products only — exclude trading goods (PP Sacks, Weed Mat, etc.)
-    # Only keep ProductIDs that exist in product_specification.product_code
+    # Filter to manufactured products only
     allowed_cur = conn.execute(
         "SELECT DISTINCT product_code FROM product_specification WHERE product_code IS NOT NULL"
     )
@@ -112,8 +204,6 @@ def ingest_item_sales(conn, fy: str, month: str) -> None:
     rows = [(pid, qty, rev) for pid, qty, rev in rows if int(pid) in allowed_ids]
     print(f"  [{month}] Filtered to {len(rows)} manufactured products "
           f"({before - len(rows)} trading/other excluded)")
-
-    conn.execute(f"DELETE FROM item_sales_{fy} WHERE month = %s", (month,))
 
     inserted = 0
     for pid, qty, rev in rows:
@@ -127,7 +217,7 @@ def ingest_item_sales(conn, fy: str, month: str) -> None:
         )
         inserted += 1
 
-    print(f"  [{month}] Inserted {inserted} rows into item_sales_{fy}")
+    print(f"  [{month}] Inserted {inserted} rows into item_sales_{fy} (from priya_textile)")
 
 
 if __name__ == "__main__":

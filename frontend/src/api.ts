@@ -20,7 +20,7 @@ export const api = {
     directExpenses: (months: string[], fy?: string) => get<{ data: any[] }>("/direct_expenses", { months: months.join(","), ...(fy ? { fy } : {}) }),
     contribution: (months: string[], fy?: string) => get<{ data: any[] }>("/contribution", { months: months.join(","), ...(fy ? { fy } : {}) }),
     uploadAndProcess: async (params: {
-        coreFile: File;
+        coreFile?: File | null;
         balanceFile?: File | null;
         salaryFile?: File | null;
         itemSalesFile?: File | null;
@@ -29,7 +29,7 @@ export const api = {
         replaceExisting?: boolean;
     }) => {
         const form = new FormData();
-        form.append("core_file", params.coreFile);
+        if (params.coreFile) form.append("core_file", params.coreFile);
         if (params.balanceFile) form.append("balance_file", params.balanceFile);
         if (params.salaryFile) form.append("salary_file", params.salaryFile);
         if (params.itemSalesFile) form.append("item_sales_file", params.itemSalesFile);
@@ -38,6 +38,6 @@ export const api = {
         form.append("replace_existing", String(params.replaceExisting ?? false));
         const res = await fetch(`${BASE}/upload-and-process`, { method: "POST", body: form });
         if (!res.ok) throw new Error("Upload & process failed");
-        return res.json() as Promise<{ ok: boolean; logs: string; error?: string; user_message?: string | null }>;
+        return res.json() as Promise<{ ok: boolean; logs: string; user_message?: string | null; error_stage?: string | null; error_detail?: string | null }>;
     },
 };

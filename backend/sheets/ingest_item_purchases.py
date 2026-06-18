@@ -1,20 +1,21 @@
 """
-Ingest per-product purchase register from the annual Purchase Register Excel file.
+Ingest per-product purchases into item_purchases_{fy}.
 
-Source file: "Purchase Register April25-Mar26.xlsx"
-    Col 0: Date
-    Col 1: Month  (e.g. 'Apr-25', 'May-25', ..., 'Mar-26')
-    Col 2: Product Code  (integer)
-    Col 3: Product Name
-    Col 4: Category
-    Col 5: QTY (Kg)
-    Col 6: QTY (Meters)
-    Col 7: Value  (purchase cost)
+PRIMARY SOURCE (preferred): Excel file with a sheet named "purchase" (case-insensitive),
+    as exported from Tally (e.g. "1.Apr 26 SKU Sales Purchase.xlsx").
+    Expected layout — header row contains "Common Code", data follows:
+        Col 0: Sl. No.
+        Col 1: Common Code    →  product_id
+        Col 2: ITEM
+        Col 3: ALT.QTY        →  alternate qty (KGS for most products)
+        Col 4: STOCK QTY      →  stock qty (MTR for most products)
+        Col 5: (blank)        →  rate per STOCK unit (= AMOUNT / STOCK QTY)
+        Col 6: AMOUNT         →  total purchase value
+    KGS/MTR disambiguation: if col-5 rate > 100 → STOCK unit is KGS; otherwise ALT is KGS.
+    Multiple rows with the same Common Code are summed.
 
-Only fabric/trading categories are included (goods bought for resale):
-    PURCHASE_CATEGORIES = {'Monofil Fabric', 'Trading/Fabric'}
-
-Rows with no Kg quantity are skipped.  Multiple rows per product are summed.
+FALLBACK SOURCE: Old "Purchase Register" Excel (Date in A1, cols: Date, Month, ProductCode,
+    Name, Category, QTY(Kg), QTY(Mtr), Value).  Used when no "purchase" sheet is found.
 
 Target table: item_purchases_{fy}
     product_id           INT
@@ -64,25 +65,92 @@ def _create_table(conn, fy: str) -> None:
     conn.commit()
 
 
+def _read_purchase_sheet(wb, filepath_name: str) -> dict[int, dict] | None:
+    """
+    Try to read from a sheet named 'purchase' (case-insensitive).
+    Returns {product_id: {'qty': float, 'value': float}} or None if sheet absent.
+
+    KGS/MTR disambiguation: the blank col (col 5) holds AMOUNT/STOCK QTY.
+    If that rate > 100, STOCK unit is KGS; otherwise ALT.QTY is KGS.
+    """
+    sheet_name = next((s for s in wb.sheetnames if s.lower() == "purchase"), None)
+    if sheet_name is None:
+        return None
+
+    ws = wb[sheet_name]
+    rows = list(ws.iter_rows(values_only=True))
+
+    # Find header row: first row containing "Common Code"
+    header_row = None
+    for i, row in enumerate(rows):
+        if any(str(c).strip().lower() == "common code" for c in row if c is not None):
+            header_row = i
+            break
+
+    if header_row is None:
+        print(f"  ⚠  'purchase' sheet in {filepath_name} has no 'Common Code' header")
+        return None
+
+    headers = [str(c).strip() if c is not None else "" for c in rows[header_row]]
+    try:
+        col_code  = next(i for i, h in enumerate(headers) if h.lower() == "common code")
+        col_alt   = next(i for i, h in enumerate(headers) if h.lower() == "alt.qty")
+        col_stock = next(i for i, h in enumerate(headers) if h.lower() == "stock qty")
+        col_rate  = col_stock + 1  # blank col immediately after STOCK QTY
+        col_amt   = next(i for i, h in enumerate(headers) if h.lower() == "amount")
+    except StopIteration as e:
+        print(f"  ⚠  'purchase' sheet missing expected column: {e}")
+        return None
+
+    totals: dict[int, dict] = defaultdict(lambda: {"qty": 0.0, "value": 0.0})
+
+    for row in rows[header_row + 1:]:
+        code = row[col_code] if col_code < len(row) else None
+        if code is None:
+            continue
+        try:
+            pid = int(code)
+        except (TypeError, ValueError):
+            continue
+
+        amount    = float(row[col_amt]   or 0) if col_amt   < len(row) else 0.0
+        alt_qty   = float(row[col_alt]   or 0) if col_alt   < len(row) else 0.0
+        stock_qty = float(row[col_stock] or 0) if col_stock < len(row) else 0.0
+        rate_col  = row[col_rate] if col_rate < len(row) else None
+
+        # Determine which column is in KGS
+        # rate_col = AMOUNT / STOCK QTY; fabrics cost >₹100/kg but <₹100/mtr
+        rate_per_stock = float(rate_col) if rate_col is not None else (
+            amount / stock_qty if stock_qty else 0.0
+        )
+        if rate_per_stock > 100:
+            qty_kg = stock_qty  # STOCK unit is KGS
+        else:
+            qty_kg = alt_qty    # ALT unit is KGS
+
+        if qty_kg <= 0 or amount <= 0:
+            continue
+
+        totals[pid]["qty"]   += qty_kg
+        totals[pid]["value"] += amount
+
+    return dict(totals)
+
+
 def ingest_item_purchases(conn, filepath: Path, fy: str, month: str) -> None:
     """
-    Read purchase register rows for *month* from *filepath* and upsert into
-    item_purchases_{fy}.
+    Read purchase data for *month* from *filepath* and upsert into item_purchases_{fy}.
 
-    Reads ALL sheets whose first cell is 'Date' (covers PurchaseRegister and
-    any month-specific overflow sheets like March26).
-
-    Only products present in product_specification are kept — trading goods
-    such as PP Woven Sacks and Weed Mat are excluded.
+    Tries the new 'purchase' sheet format first; falls back to the old Purchase
+    Register format (Date in A1).
 
     Parameters
     ----------
     conn      : DB connection returned by get_connection()
-    filepath  : Path to the Purchase Register Excel file
+    filepath  : Excel file — either new SKU Sales+Purchase file or old Purchase Register
     fy        : FY suffix, e.g. '25_26'
-    month     : Three-letter month abbreviation, e.g. 'Mar'
+    month     : Three-letter month abbreviation, e.g. 'Apr'
     """
-    # Fetch allowed product_ids from product_specification (manufactured only)
     allowed_cur = conn.execute(
         "SELECT DISTINCT product_code FROM product_specification WHERE product_code IS NOT NULL"
     )
@@ -90,12 +158,39 @@ def ingest_item_purchases(conn, filepath: Path, fy: str, month: str) -> None:
 
     wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
 
+    # ── Try new 'purchase' sheet format first ──────────────────────────────
+    new_totals = _read_purchase_sheet(wb, filepath.name)
+    if new_totals is not None:
+        wb.close()
+        before = len(new_totals)
+        totals = {pid: d for pid, d in new_totals.items() if pid in allowed_ids}
+        excluded = before - len(totals)
+        print(
+            f"  [{month}] Read {len(totals)} products from 'purchase' sheet ({filepath.name})"
+            + (f" ({excluded} not in product_spec excluded)" if excluded else "")
+        )
+        _create_table(conn, fy)
+        conn.execute(f"DELETE FROM item_purchases_{fy} WHERE month = %s", (month,))
+        inserted = 0
+        for pid, d in totals.items():
+            qty  = d["qty"]
+            rate = d["value"] / qty if qty else 0.0
+            conn.execute(
+                f"""INSERT INTO item_purchases_{fy} (product_id, month, qty, purchase_rate_per_kg)
+                    VALUES (%s, %s, %s, %s)""",
+                (pid, month, qty, rate),
+            )
+            inserted += 1
+        print(f"  [{month}] Inserted {inserted} rows into item_purchases_{fy}")
+        return
+
+    # ── Fallback: old Purchase Register format (Date in A1) ───────────────
+    print(f"  [{month}] No 'purchase' sheet found — using old Purchase Register format")
     totals: dict[int, dict] = defaultdict(lambda: {"qty": 0.0, "value": 0.0})
     skipped_no_qty = 0
 
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
-        # Skip pivot/summary sheets — data sheets have 'Date' in A1
         first_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
         if not first_row or str(first_row[0] or "").strip() != "Date":
             continue
@@ -132,7 +227,6 @@ def ingest_item_purchases(conn, filepath: Path, fy: str, month: str) -> None:
 
     wb.close()
 
-    # Filter to manufactured products only
     before = len(totals)
     totals = {pid: d for pid, d in totals.items() if pid in allowed_ids}
     excluded = before - len(totals)

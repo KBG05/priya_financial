@@ -132,16 +132,20 @@ export function TopBarRight({ fy, availableFYs }: Props) {
     // Status
     const [status, setStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
     const [logs, setLogs] = useState("");
+    const [errorStage, setErrorStage] = useState("");
+    const [errorDetail, setErrorDetail] = useState("");
 
     const busy = status === "running";
 
     const handleSubmit = async () => {
-        if (!coreFile) return;
+        if (!coreFile && !itemSalesFile) return;
         setStatus("running");
         setLogs("");
+        setErrorStage("");
+        setErrorDetail("");
         try {
             const balanceFile = balMode === "Same as core"
-                ? (coreMode === "MIS File" ? coreFile : null)
+                ? (coreMode === "MIS File" && coreFile ? coreFile : null)
                 : balFile;
             const res = await api.uploadAndProcess({
                 coreFile,
@@ -156,11 +160,13 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                 setLogs(res.logs);
                 setStatus("ok");
             } else {
-                setLogs(res.user_message || "Upload failed. Please check the files and try again.");
+                setLogs(res.logs || "");
+                setErrorStage(res.error_stage || "");
+                setErrorDetail(res.user_message || "Upload failed. Please check the files and try again.");
                 setStatus("error");
             }
         } catch (e: any) {
-            setLogs("Upload failed. Please check the files and try again.");
+            setErrorDetail("Could not reach the server. Make sure the backend is running.");
             setStatus("error");
         }
     };
@@ -305,7 +311,7 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                         {/* ── Submit ───────────────────────────────────── */}
                         <Button
                             onClick={handleSubmit}
-                            disabled={busy || !coreFile}
+                            disabled={busy || (!coreFile && !itemSalesFile)}
                             className="w-full gap-2"
                         >
                             {busy
@@ -316,20 +322,47 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                         {/* ── Status + logs ────────────────────────────── */}
                         {status !== "idle" && (
                             <div className="rounded-lg border border-border overflow-hidden">
-                                <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold ${status === "ok" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                {/* Header bar */}
+                                <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold ${
+                                    status === "ok"      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                     : status === "error" ? "bg-destructive/10 text-destructive"
-                                        : "bg-muted text-muted-foreground"}`}>
-                                    {status === "ok" && <CheckCircle2 size={13} />}
-                                    {status === "error" && <XCircle size={13} />}
+                                                         : "bg-muted text-muted-foreground"}`}>
+                                    {status === "ok"      && <CheckCircle2 size={13} />}
+                                    {status === "error"   && <XCircle size={13} />}
                                     {status === "running" && <Loader2 size={13} className="animate-spin" />}
-                                    {status === "ok" ? "Pipeline completed successfully"
-                                        : status === "error" ? "Pipeline finished with errors"
-                                            : "Running pipeline…"}
+                                    {status === "ok"      ? "Pipeline completed successfully"
+                                     : status === "error" ? "Pipeline failed"
+                                                          : "Running pipeline…"}
                                 </div>
+
+                                {/* Structured error card */}
+                                {status === "error" && (errorStage || errorDetail) && (
+                                    <div className="p-3 bg-destructive/5 border-b border-border flex flex-col gap-2">
+                                        {errorStage && (
+                                            <div className="flex items-start gap-2">
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive/70 shrink-0 pt-px">Stage</span>
+                                                <span className="text-[11px] font-medium text-destructive">{errorStage}</span>
+                                            </div>
+                                        )}
+                                        {errorDetail && errorDetail.split("\n\n").map((para, i) => (
+                                            <p key={i} className={`text-[11px] leading-relaxed ${i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                                                {para}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Raw log (collapsible feel — scrollable) */}
                                 {logs && (
-                                    <pre className="text-[10px] leading-relaxed p-3 bg-muted/20 overflow-auto max-h-64 whitespace-pre-wrap font-mono">
-                                        {logs}
-                                    </pre>
+                                    <details className="group">
+                                        <summary className="text-[10px] text-muted-foreground px-3 py-1.5 cursor-pointer hover:bg-muted/30 select-none list-none flex items-center gap-1">
+                                            <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+                                            {status === "ok" ? "View pipeline log" : "View full log for details"}
+                                        </summary>
+                                        <pre className="text-[10px] leading-relaxed p-3 bg-muted/20 overflow-auto max-h-64 whitespace-pre-wrap font-mono border-t border-border">
+                                            {logs}
+                                        </pre>
+                                    </details>
                                 )}
                             </div>
                         )}

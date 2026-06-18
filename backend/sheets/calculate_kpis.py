@@ -48,6 +48,14 @@ def _q(conn, sql, params=()):
     return safe_float(row[0]) if row else 0.0
 
 
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
 def calculate_kpis(conn, fy_suffix):
     parts = fy_suffix.split("_")
     prev_fy = None
@@ -122,8 +130,9 @@ def calculate_kpis(conn, fy_suffix):
     }
 
     for i, month in enumerate(months):
-        print(f"  Processing {month}...")
-        prev_month = months[i - 1] if i > 0 else None
+        # Previous month in fiscal calendar order (None for April = start of FY)
+        mo_idx = MONTH_ORDER.index(month)
+        prev_month = MONTH_ORDER[mo_idx - 1] if mo_idx > 0 else None
         days = DAYS_IN_MONTH.get(month, 30)
 
         # ====== VALUES FROM MTY ======
@@ -132,6 +141,12 @@ def calculate_kpis(conn, fy_suffix):
             f"SELECT value FROM mty_{fy_suffix} WHERE month=%s AND line_item='TOTAL SALES->'",
             (month,),
         )
+
+        if total_sales == 0:
+            print(f"  Skipping {month} — no sales data (TOTAL SALES = 0)")
+            continue
+
+        print(f"  Processing {month}...")
         var_yarn = _q(
             conn,
             f"SELECT value FROM mty_{fy_suffix} WHERE month=%s AND line_item='Variable-Yarn Cost'",
@@ -164,15 +179,19 @@ def calculate_kpis(conn, fy_suffix):
         )
 
         # 1. Revenue Growth
-        if month == "Apr" and prev_fy:
-            try:
+        # April: compare against March of the previous FY (if that table exists).
+        # Other months: compare against the previous month within this FY.
+        if month == "Apr":
+            prev_mty_table = f"mty_{prev_fy}" if prev_fy else None
+            if prev_mty_table and _table_exists(conn, prev_mty_table):
                 prev_total_sales = _q(
                     conn,
-                    f"SELECT value FROM mty_{prev_fy} WHERE month=%s AND line_item='TOTAL SALES->'",
-                    ("Mar",),
+                    f"SELECT value FROM {prev_mty_table} WHERE month='Mar' AND line_item='TOTAL SALES->'",
                 )
-            except Exception:
+                print(f"    Revenue growth: using Mar from {prev_mty_table} ({prev_total_sales:,.0f})")
+            else:
                 prev_total_sales = 0.0
+                print(f"    Revenue growth: prev-FY table '{prev_mty_table}' not found — growth set to 0")
         else:
             prev_total_sales = _q(
                 conn,

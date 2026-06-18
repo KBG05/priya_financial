@@ -239,7 +239,7 @@ def _save_upload(file: UploadFile, prefix: str, content: bytes) -> Path:
 
 @app.post("/upload-and-process")
 async def upload_and_process(
-    core_file: UploadFile = File(..., description="Sales_Pur_Exps or MIS file"),
+    core_file: Optional[UploadFile] = File(None, description="Sales_Pur_Exps or MIS file (optional — omit to run contribution-only)"),
     balance_file: Optional[UploadFile] = File(None, description="MIS or BS_PL_CF for balance sheet/KPIs"),
     salary_file: Optional[UploadFile] = File(None, description="Salary Excel file (optional)"),
     item_sales_file: Optional[UploadFile] = File(None, description="Item-level sales file for contribution (optional)"),
@@ -253,17 +253,25 @@ async def upload_and_process(
     printed to the server console for operator reference.
     """
     # ── Save uploaded files ──────────────────────────────────────────────
-    core_bytes = await core_file.read()
-    core_path = _save_upload(core_file, "core", core_bytes)
+    core_path: Optional[Path] = None
+    core_bytes: bytes | None = None
+    if core_file and core_file.filename:
+        core_bytes = await core_file.read()
+        core_path = _save_upload(core_file, "core", core_bytes)
 
+    bal_bytes: bytes | None = None
     balance_path: Optional[Path] = None
     if balance_file and balance_file.filename:
         bal_bytes = await balance_file.read()
         balance_path = _save_upload(balance_file, "balance", bal_bytes)
 
+    has_item_sales = bool(item_sales_file and item_sales_file.filename)
+    if not core_path and not balance_path and not has_item_sales:
+        return {"ok": False, "error": "No files provided.", "logs": ""}
+
     # True = same file uploaded for core+balance (MIS); False = separate Tally BS file
     balance_is_mis: bool | None = None
-    if balance_path is not None:
+    if balance_path is not None and core_bytes is not None and bal_bytes is not None:
         balance_is_mis = (core_bytes == bal_bytes)
 
     balance_warnings: list[str] = []
@@ -312,8 +320,9 @@ async def upload_and_process(
     # ── Run pipeline (capture + echo logs) ───────────────────────────────
     log_buf = io.StringIO()
     print(f"\n{'='*64}")
-    print(f"[PIPELINE] Starting — FY={fy}  core={core_file.filename}  "
-          f"balance={balance_file.filename if balance_file else '—'}  "
+    print(f"[PIPELINE] Starting — FY={fy}  "
+          f"core={core_file.filename if core_file and core_file.filename else '(none)'}  "
+          f"balance={balance_file.filename if balance_file and balance_file.filename else '—'}  "
           f"months={selected_months or 'all'}")
     print(f"{'='*64}")
 
@@ -322,6 +331,8 @@ async def upload_and_process(
 
     ok = False
     user_message = ""
+    error_stage = ""
+    error_detail = ""
     try:
         with redirect_stdout(log_buf), redirect_stderr(log_buf):
             run_pipeline(
@@ -336,14 +347,85 @@ async def upload_and_process(
         ok = True
     except BaseException as exc:
         log_buf.write(traceback.format_exc())
-        user_message = (
-            "Upload failed. Please verify the selected files and month, then try again."
-        )
 
     logs = log_buf.getvalue()
+
+    if not ok:
+        # Extract the pipeline stage that was running when the error occurred
+        stage_map = {
+            "[STEP 1]": "Step 1 — Purchases ingestion",
+            "[STEP 2]": "Step 2 — Inventory Sales ingestion",
+            "[STEP 3]": "Step 3 — Direct Expenses ingestion",
+            "[STEP 4]": "Step 4 — Indirect Expenses ingestion",
+            "[STEP 5]": "Step 5 — Stock Valuation ingestion",
+            "[STEP 6]": "Step 6 — Balance Sheet ingestion",
+            "[STEP 7]": "Step 7 — PAL 1 calculation",
+            "[STEP 8]": "Step 8 — Consumption Output calculation",
+            "[STEP 9]": "Step 9 — Direct Expenses Output calculation",
+            "[STEP 10]": "Step 10 — MTY calculation",
+            "[STEP 11]": "Step 11 — KPI calculation",
+            "[STEP 11A]": "Step 11A — Item Sales ingestion",
+            "[STEP 11B]": "Step 11B — Contribution calculation",
+        }
+        last_step = ""
+        for line in logs.splitlines():
+            for key, label in stage_map.items():
+                if key in line:
+                    last_step = label
+
+        # Extract the root error line from the traceback
+        raw_error = ""
+        for line in logs.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("ValueError:", "KeyError:", "TypeError:",
+                                    "AttributeError:", "IndexError:", "RuntimeError:",
+                                    "psycopg2.", "OperationalError:", "❌")):
+                raw_error = stripped
+                break
+        # Fallback: last non-empty line before traceback
+        if not raw_error:
+            for line in reversed(logs.splitlines()):
+                stripped = line.strip()
+                if stripped and not stripped.startswith(("File ", "Traceback", "During")):
+                    raw_error = stripped
+                    break
+
+        error_stage = last_step or "Pipeline"
+        error_detail = raw_error or "An unexpected error occurred."
+
+        friendly_hints = {
+            "#DIV/0!": "The Excel file contains a #DIV/0! error cell. Open the file and fix the formula in the flagged cell before re-uploading.",
+            "could not convert string to float": "A cell that should contain a number contains text or an Excel error (e.g. #DIV/0!, #REF!). Check the highlighted sheet/row.",
+            "no such table": "A required database table is missing. This usually means a prior pipeline step failed — check earlier steps in the log.",
+            "column": "A database column mismatch. The uploaded file may have a different format or sheet layout than expected.",
+            "sheet": "A required Excel sheet was not found in the uploaded file. Verify you uploaded the correct file type (MIS vs Sales & Exp).",
+            "password": "The Excel file appears to be password-protected. Remove the password before uploading.",
+            "openpyxl": "The uploaded file could not be opened. Ensure it is a valid .xlsx file and not corrupted.",
+            "duplicate key": "Data for this month already exists. Enable 'Replace existing' to overwrite it.",
+            "UniqueViolation": "Data for this month already exists. Enable 'Replace existing' to overwrite it.",
+        }
+        hint = ""
+        combined = (error_detail + logs).lower()
+        for keyword, msg in friendly_hints.items():
+            if keyword.lower() in combined:
+                hint = msg
+                break
+
+        user_message = f"Failed at: {error_stage}."
+        if error_detail:
+            user_message += f"\n\nError: {error_detail}"
+        if hint:
+            user_message += f"\n\nSuggestion: {hint}"
+
     # Echo full pipeline output to server console
     for line in logs.splitlines():
         print(f"  {line}")
     print(f"[PIPELINE] {'✅ done' if ok else '❌ failed'}")
 
-    return {"ok": ok, "logs": logs, "user_message": user_message or None}
+    return {
+        "ok": ok,
+        "logs": logs,
+        "user_message": user_message or None,
+        "error_stage": error_stage or None,
+        "error_detail": error_detail or None,
+    }
