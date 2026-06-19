@@ -164,9 +164,12 @@ def run_pipeline(
     )
 
     try:
-        # ── Backup non-selected months before ingestion (unless --replace-existing) ──
+        # ── Backup non-selected months before ingestion ────────────────────
+        # Always preserve other months regardless of replace_existing.
+        # replace_existing only means "allow overwriting the selected month",
+        # not "destroy data for months we didn't upload".
         preserved = {}
-        if selected_months and not replace_existing:
+        if selected_months:
             print("[PREP] Preserving existing non-selected months...")
             for table in BASE_TABLES + OUTPUT_TABLES:
                 preserved[table] = _backup_rows_outside_months(conn, table, selected_months)
@@ -204,12 +207,11 @@ def run_pipeline(
         # ── Apply month filter to base tables after ingestion ──────────────
         if selected_months and sales_pur_file:
             print(f"\n[STEP 6B] Applying month filter to ingested tables: {selected_months}")
-            _prune_months(conn, fy, selected_months, include_outputs=False)
-            if not replace_existing:
-                print("[STEP 6C] Restoring preserved base months...")
-                for table in BASE_TABLES:
-                    _restore_backup_rows(conn, table, preserved.get(table))
-                conn.commit()
+            _prune_months(conn, fy, selected_months, tables=BASE_TABLES)
+            print("[STEP 6C] Restoring preserved base months...")
+            for table in BASE_TABLES:
+                _restore_backup_rows(conn, table, preserved.get(table))
+            conn.commit()
 
         if sales_pur_file:
             # ── 7. PAL 1 ──────────────────────────────────────────────────
@@ -268,14 +270,13 @@ def run_pipeline(
             print("\n[STEP 11B] Contribution — skipped (no --months specified)")
 
         # ── Apply month filter to output tables after calculations ─────────
-        if selected_months:
-            print(f"\n[STEP 11B] Applying month filter to output tables: {selected_months}")
-            _prune_months(conn, fy, selected_months, include_outputs=True)
-            if not replace_existing:
-                print("[STEP 11C] Restoring preserved output months...")
-                for table in OUTPUT_TABLES:
-                    _restore_backup_rows(conn, table, preserved.get(table))
-                conn.commit()
+        if selected_months and OUTPUT_TABLES:
+            print(f"\n[STEP 11C] Applying month filter to output tables: {selected_months}")
+            _prune_months(conn, fy, selected_months, tables=OUTPUT_TABLES)
+            print("[STEP 11D] Restoring preserved output months...")
+            for table in OUTPUT_TABLES:
+                _restore_backup_rows(conn, table, preserved.get(table))
+            conn.commit()
 
         conn.commit()
         print(f"\n{'='*64}")

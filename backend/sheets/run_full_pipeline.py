@@ -174,27 +174,29 @@ def _ingest_balance_from_bs_pl_cf(
 
 
 def _prune_months(
-    conn, fy_suffix: str, keep_months: list[str], include_outputs: bool = False
+    conn, fy_suffix: str, keep_months: list[str], include_outputs: bool = False,
+    tables: list[str] | None = None,
 ) -> None:
     placeholders = ",".join(["%s"] * len(keep_months))
 
-    base_tables = [
-        f"purchases_{fy_suffix}",
-        f"inventory_sales_{fy_suffix}",
-        f"direct_expenses_{fy_suffix}",
-        f"indirect_expenses_{fy_suffix}",
-        f"stock_valuation_{fy_suffix}",
-        f"balance_sheet_{fy_suffix}",
-        f"salary_{fy_suffix}",
-    ]
-    output_tables = [
-        f"pal_1_{fy_suffix}",
-        f"consumption_output_{fy_suffix}",
-        f"direct_expenses_output_{fy_suffix}",
-        f"mty_{fy_suffix}",
-        f"kpis_{fy_suffix}",
-    ]
-    tables = output_tables if include_outputs else base_tables
+    if tables is None:
+        base_tables = [
+            f"purchases_{fy_suffix}",
+            f"inventory_sales_{fy_suffix}",
+            f"direct_expenses_{fy_suffix}",
+            f"indirect_expenses_{fy_suffix}",
+            f"stock_valuation_{fy_suffix}",
+            f"balance_sheet_{fy_suffix}",
+            f"salary_{fy_suffix}",
+        ]
+        output_tables = [
+            f"pal_1_{fy_suffix}",
+            f"consumption_output_{fy_suffix}",
+            f"direct_expenses_output_{fy_suffix}",
+            f"mty_{fy_suffix}",
+            f"kpis_{fy_suffix}",
+        ]
+        tables = output_tables if include_outputs else base_tables
 
     for table in tables:
         try:
