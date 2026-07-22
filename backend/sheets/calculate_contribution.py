@@ -14,7 +14,21 @@ Per-month cost scalars (identical for all SKUs in the same month):
                            FROM consumption_output_{fy}
                            WHERE material = 'Raw Material Consumption'
 
-    filament_conv_per_kg = Variable-Yarn Cost (mty_{fy}) / SUM(RM consumption qty)
+    yarn_conversion_per_kg  = SUM(Wages-Yarn, Power Bill, R&M-Machinery, R&M-Electricals,
+                                   Freight Inwards, Rent, Misc, Yarn Processing charges)
+                               / SUM(RM consumption qty)
+                               -- matches PMC Rate Card "Stage 2 — Yarn Processing Rate"
+
+    fabric_addon_per_kg     = SUM(Wages-Fabric, Wages-Inspection & Dispatch,
+                                   Working Capital-Bank Charges, Working Capital-LC,
+                                   Working Capital-OCC)
+                               / SUM(RM consumption qty)
+                               -- matches PMC Rate Card "Stage 3 — Fabric Rate" common add-on
+                               -- (excludes SKU-specific fabrication charges, added per-SKU below)
+
+    filament_conv_per_kg = yarn_conversion_per_kg + fabric_addon_per_kg
+                            -- identical total to the old single-bucket calculation;
+                            -- kept as a column for backwards compatibility
 
     fabric_cost_per_kg   = rm_price_per_kg + filament_conv_per_kg
 
@@ -56,8 +70,10 @@ Target table: contribution_{fy}
     qty                  REAL   -- original sales qty
     revenue              REAL   -- original sales revenue
     selling_price_per_kg REAL   -- revenue / qty (never adjusted)
-    rm_price             REAL   -- rm_price_per_kg for this month
-    filament_conversion  REAL   -- filament_conv_per_kg for this month
+    rm_price             REAL   -- rm_price_per_kg for this month (PMC Stage1 RM)
+    yarn_conversion      REAL   -- yarn_conversion_per_kg for this month (PMC Stage2 Yarn)
+    fabric_addon         REAL   -- fabric_addon_per_kg for this month (PMC Stage3 common add-on)
+    filament_conversion  REAL   -- yarn_conversion + fabric_addon (kept for backwards compatibility)
     fabric_cost          REAL   -- rm_price + filament_conversion
     fabrication_per_kg   REAL   -- from product_specification
     mts_per_kg           REAL   -- from product_specification
@@ -107,6 +123,8 @@ def _create_table(conn, fy: str) -> None:
             revenue              REAL,
             selling_price_per_kg REAL,
             rm_price             REAL,
+            yarn_conversion      REAL,
+            fabric_addon         REAL,
             filament_conversion  REAL,
             fabric_cost          REAL,
             fabrication_per_kg   REAL,
@@ -129,6 +147,8 @@ def _migrate_table(conn, fy: str) -> None:
         ("purchase_qty_used", "REAL"),
         ("purchase_value_used", "REAL"),
         ("manufacturing_cost", "REAL"),
+        ("yarn_conversion",   "REAL"),
+        ("fabric_addon",      "REAL"),
     ]
     for col, dtype in debug_cols:
         try:
@@ -154,23 +174,32 @@ def _rm_price(conn, fy: str, month: str) -> float:
     return total_val / total_qty if total_qty else 0.0
 
 
-def _filament_conversion(conn, fy: str, month: str) -> float:
-    """
-    Filament conversion cost per kg of RM consumed.
+# PMC Rate Card "Stage 2 — Yarn Processing Rate (blended)": in-house yarn cost
+# drivers plus the outsourced "Yarn Processing charges" line — dividing the
+# actual total (in-house + outsourced) by total qty reproduces the blended
+# rate without needing an explicit outsourced-% input.
+_YARN_PARTICULARS = (
+    "Wages-Yarn", "Power Bill", "R & M-Machinery", "R & M-Electricals",
+    "Freight Inwards", "Rent", "Misc", "Yarn Processing charges",
+)
 
-    Numerator = all 'Variable & Direct Expense' EXCEPT 'Fabrication charges'.
-    This captures: Yarn Processing + Power + Wages-Yarn + Wages-Fabric +
-    Wages-I&D + Working Capital (OCC/Bank/LC) + Freight + Rent + Misc + R&M.
+# PMC Rate Card "Stage 3 — Fabric Rate Components" common add-on
+# (SKU-specific fabrication charge is added separately, per-SKU).
+_FABRIC_ADDON_PARTICULARS = (
+    "Wages-Fabric", "Wages-Inspection & Dispatch",
+    "Working Capital-Bank Charges", "Working Capital-LC", "Working Capital-OCC",
+)
 
-    Matches the reference Rate Card: Stage 2 (Yarn) + Stage 3 (Fabric add-on).
-    """
-    conversion_cost = _q1(
+
+def _sum_particulars_per_kg(conn, fy: str, month: str, particulars: tuple) -> float:
+    placeholders = ",".join(["%s"] * len(particulars))
+    cost = _q1(
         conn,
         f"""SELECT SUM(value) FROM direct_expenses_output_{fy}
             WHERE month = %s
               AND category = 'Variable & Direct Expense'
-              AND particulars != 'Fabrication charges'""",
-        (month,),
+              AND particulars IN ({placeholders})""",
+        (month, *particulars),
     )
     monofil_qty = _q1(
         conn,
@@ -178,7 +207,17 @@ def _filament_conversion(conn, fy: str, month: str) -> float:
             WHERE material = 'Raw Material Consumption' AND month = %s""",
         (month,),
     )
-    return conversion_cost / monofil_qty if monofil_qty else 0.0
+    return cost / monofil_qty if monofil_qty else 0.0
+
+
+def _yarn_conversion(conn, fy: str, month: str) -> float:
+    """Yarn conversion cost per kg of RM consumed (PMC Stage2 Yarn)."""
+    return _sum_particulars_per_kg(conn, fy, month, _YARN_PARTICULARS)
+
+
+def _fabric_addon(conn, fy: str, month: str) -> float:
+    """Common fabric add-on cost per kg of RM consumed (PMC Stage3, ex SKU fab)."""
+    return _sum_particulars_per_kg(conn, fy, month, _FABRIC_ADDON_PARTICULARS)
 
 
 def _fabric_cost(conn, fy: str, month: str) -> float:
@@ -250,10 +289,33 @@ def calculate_contribution(
         conn.execute(f"DELETE FROM contribution_{fy} WHERE month = %s", (month,))
 
         rm = _rm_price(conn, fy, month)
-        fc = _filament_conversion(conn, fy, month)
+        yarn_conv = _yarn_conversion(conn, fy, month)
+        fab_addon = _fabric_addon(conn, fy, month)
+        fc = yarn_conv + fab_addon
         fabric_cost_per_kg = rm + fc   # user definition: rm + filament_conv
 
-        print(f"  [{month}] RM_PRICE={rm:.4f}  FILAMENT_CONV={fc:.4f}  FABRIC_COST={fabric_cost_per_kg:.4f}")
+        # Sanity check: yarn_conv + fab_addon must equal the total this replaces
+        # (all Variable & Direct Expense except Fabrication charges).
+        old_total = _q1(
+            conn,
+            f"""SELECT SUM(value) FROM direct_expenses_output_{fy}
+                WHERE month = %s AND category = 'Variable & Direct Expense'
+                  AND particulars != 'Fabrication charges'""",
+            (month,),
+        )
+        monofil_qty = _q1(
+            conn,
+            f"""SELECT SUM(qty) FROM consumption_output_{fy}
+                WHERE material = 'Raw Material Consumption' AND month = %s""",
+            (month,),
+        )
+        old_fc = old_total / monofil_qty if monofil_qty else 0.0
+        if abs(old_fc - fc) > 0.01:
+            print(f"  ⚠  [{month}] Stage2+Stage3 split ({fc:.4f}) does not match "
+                  f"lump-sum total ({old_fc:.4f}) — check particulars naming")
+
+        print(f"  [{month}] RM_PRICE={rm:.4f}  YARN_CONV={yarn_conv:.4f}  "
+              f"FABRIC_ADDON={fab_addon:.4f}  FILAMENT_CONV={fc:.4f}  FABRIC_COST={fabric_cost_per_kg:.4f}")
 
         # LEFT JOIN item_purchases if the table exists (optional purchase register)
         has_purchases = _table_exists(conn, f"item_purchases_{fy}")
@@ -342,12 +404,13 @@ def calculate_contribution(
             conn.execute(
                 f"""INSERT INTO contribution_{fy}
                     (product_id, product_name, month, qty, revenue, selling_price_per_kg,
-                     rm_price, filament_conversion, fabric_cost, fabrication_per_kg, mts_per_kg,
+                     rm_price, yarn_conversion, fabric_addon, filament_conversion, fabric_cost,
+                     fabrication_per_kg, mts_per_kg,
                      contribution_per_kg, sales_mtrs, contribution_value,
                      produced_qty, purchase_qty_used, purchase_value_used, manufacturing_cost)
-                VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s,%s)""",
+                VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s,%s,%s)""",
                 (pid, pname, month, qty, rev, sell_rate,
-                 rm, fc, fabric_cost_per_kg, fab_per_kg, mts_per_kg,
+                 rm, yarn_conv, fab_addon, fc, fabric_cost_per_kg, fab_per_kg, mts_per_kg,
                  contrib_per_kg, sales_mtrs, contrib_value,
                  produced_qty, purchase_qty_used, purchase_value_used, manufacturing_cost),
             )
