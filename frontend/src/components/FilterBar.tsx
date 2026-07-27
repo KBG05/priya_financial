@@ -68,13 +68,13 @@ export function FilterBar({
     };
 
     return (
-        <div className="flex flex-wrap items-end gap-3 p-4 bg-card card-elevated rounded-xl">
+        <div className="flex flex-wrap items-end gap-4 px-4 py-3 bg-card border border-border/70 rounded-xl">
             {/* Fiscal Year — always visible */}
             <>
                 <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
                     <Select value={fy} onValueChange={onFyChange}>
-                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold">
+                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold font-display">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent {...scProps}>
@@ -86,11 +86,11 @@ export function FilterBar({
                         </SelectContent>
                     </Select>
                 </div>
-                <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
+                <Separator orientation="vertical" className="h-9 self-end mb-0.5 bg-border hidden sm:block" />
             </>
             {/* View Mode */}
             <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">View</label>
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">View</label>
                 <Select value={viewMode} onValueChange={handleViewModeChange}>
                     <SelectTrigger className="w-40 h-8 bg-background border-border text-sm">
                         <SelectValue />
@@ -103,7 +103,7 @@ export function FilterBar({
                 </Select>
             </div>
 
-            <Separator orientation="vertical" className="h-9 self-end mb-0.5 opacity-30 hidden sm:block" />
+            <Separator orientation="vertical" className="h-9 self-end mb-0.5 bg-border hidden sm:block" />
 
             {/* Single month picker */}
             {viewMode === "single" && (

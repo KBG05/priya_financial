@@ -3,9 +3,10 @@ import {
     ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Cell,
 } from "recharts";
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown, ChevronRight, Table2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
+import { StatStrip } from "@/components/StatStrip";
+import { BreakdownGrid } from "@/components/BreakdownGrid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
     // Single state object so key+dir always update atomically — fixes the "sort once" bug
     const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "contribution_per_kg", dir: "desc" });
     const [page, setPage] = useState(1);
+    const [showFullTable, setShowFullTable] = useState(false);
     const PAGE_SIZE = 25;
 
     const cur = months[months.length - 1];
@@ -183,108 +185,127 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
     );
 
     return (
-        <div className="flex flex-col gap-3 min-w-0 w-full">
-            {/* ── Hero + Chart row ── */}
-            <div className="flex flex-col xl:flex-row gap-3">
-                <div className="flex-1 min-w-0">
-                    <Card className="card-elevated h-full">
-                        <CardHeader className="py-2 px-4">
-                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                Top {Math.min(TOP_N, chartRows.length)} Products — Contribution Value
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pb-2 px-2 sm:px-4">
-                            <div style={{ width: "100%", height: 260 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart
-                                        data={chartRows}
-                                        margin={{ left: 0, right: 0, top: 8, bottom: 60 }}
-                                    >
-                                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                        <XAxis
-                                            dataKey="name"
-                                            tickLine={false}
-                                            axisLine={false}
-                                            tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                                            angle={-40}
-                                            textAnchor="end"
-                                            interval={0}
-                                        />
-                                        <YAxis
-                                            yAxisId="value"
-                                            tickLine={false}
-                                            axisLine={false}
-                                            tickMargin={4}
-                                            tickFormatter={v => fmt(v, { rupee: true })}
-                                            width={112}
-                                            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                                        />
-                                        <YAxis
-                                            yAxisId="rate"
-                                            orientation="right"
-                                            tickLine={false}
-                                            axisLine={false}
-                                            tickMargin={4}
-                                            tickFormatter={v => `₹${v.toFixed(0)}`}
-                                            width={64}
-                                            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                                        />
-                                        <Tooltip
-                                            cursor={false}
-                                            content={(props: any) => {
-                                                const { active, payload, label } = props;
-                                                if (!active || !payload?.length) return null;
-                                                return (
-                                                    <div className="bg-popover border border-border rounded-lg p-3 text-xs text-popover-foreground shadow-md max-w-52">
-                                                        <div className="font-semibold mb-2 text-sm leading-tight">{label}</div>
-                                                        <div className="space-y-1.5">
-                                                            {payload.map((entry: any, i: number) => (
-                                                                <div key={i} className="flex items-center justify-between gap-3">
-                                                                    <span className="flex items-center gap-1.5">
-                                                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                                                                        <span className="text-muted-foreground font-medium">
-                                                                            {entry.dataKey === "contribution_value" ? "Contribution" : "Rate / kg"}
-                                                                        </span>
-                                                                    </span>
-                                                                    <span className="font-semibold">
-                                                                        {entry.dataKey === "contribution_value"
-                                                                            ? fmt(Number(entry.value), { rupee: true })
-                                                                            : `₹${Number(entry.value).toFixed(2)}/kg`}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }}
-                                        />
-                                        <Bar yAxisId="value" dataKey="contribution_value" radius={[3, 3, 0, 0]}>
-                                            {chartRows.map((r, i) => (
-                                                <Cell key={i} fill={r.contribution_value >= 0 ? BAR_COLOR_POS : BAR_COLOR_NEG} fillOpacity={0.85} />
-                                            ))}
-                                        </Bar>
-                                        <Line
-                                            yAxisId="rate"
-                                            type="linear"
-                                            dataKey="contribution_per_kg"
-                                            stroke={LINE_COLOR}
-                                            strokeWidth={2}
-                                            dot={{ fill: LINE_COLOR, r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+        <div className="flex flex-col gap-4 min-w-0 w-full">
+            <StatStrip leadFirst stats={[
+                { title: "Total Contribution Value", value: totalContribValue, rupee: true, deltaMode: "default" },
+                { title: "Avg Contribution / kg",    value: avgContribPerKg,   rupee: true, deltaMode: "default" },
+                { title: "Total Revenue",             value: totalRevenue,      rupee: true, deltaMode: "default" },
+                { title: "Positive Margin SKUs",       value: positiveCount,     deltaMode: "neutral" },
+                { title: "Negative Margin SKUs",       value: negativeCount,     deltaMode: "inverse" },
+            ]} />
 
-                <HeroMetricsPanel metrics={[
-                    { title: "Total Contribution Value", value: totalContribValue, rupee: true, deltaMode: "default" },
-                    { title: "Avg Contribution / kg",    value: avgContribPerKg,   rupee: true, deltaMode: "default" },
-                    { title: "Total Revenue",             value: totalRevenue,      rupee: true, deltaMode: "default" },
-                ]} />
-            </div>
+            <Card className="card-elevated">
+                <CardHeader className="py-2 px-4">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Top {Math.min(TOP_N, chartRows.length)} Products — Contribution Value
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2 px-2 sm:px-4">
+                    <div style={{ width: "100%", height: 280 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart
+                                data={chartRows}
+                                margin={{ left: 0, right: 0, top: 8, bottom: 60 }}
+                            >
+                                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                                    angle={-40}
+                                    textAnchor="end"
+                                    interval={0}
+                                />
+                                <YAxis
+                                    yAxisId="value"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickMargin={4}
+                                    tickFormatter={v => fmt(v, { rupee: true })}
+                                    width={112}
+                                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                                />
+                                <YAxis
+                                    yAxisId="rate"
+                                    orientation="right"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickMargin={4}
+                                    tickFormatter={v => `₹${v.toFixed(0)}`}
+                                    width={64}
+                                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                                />
+                                <Tooltip
+                                    cursor={false}
+                                    content={(props: any) => {
+                                        const { active, payload, label } = props;
+                                        if (!active || !payload?.length) return null;
+                                        return (
+                                            <div className="bg-popover border border-border rounded-lg p-3 text-xs text-popover-foreground shadow-md max-w-52">
+                                                <div className="font-semibold mb-2 text-sm leading-tight">{label}</div>
+                                                <div className="space-y-1.5">
+                                                    {payload.map((entry: any, i: number) => (
+                                                        <div key={i} className="flex items-center justify-between gap-3">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                                                                <span className="text-muted-foreground font-medium">
+                                                                    {entry.dataKey === "contribution_value" ? "Contribution" : "Rate / kg"}
+                                                                </span>
+                                                            </span>
+                                                            <span className="font-semibold">
+                                                                {entry.dataKey === "contribution_value"
+                                                                    ? fmt(Number(entry.value), { rupee: true })
+                                                                    : `₹${Number(entry.value).toFixed(2)}/kg`}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                />
+                                <Bar yAxisId="value" dataKey="contribution_value" radius={[3, 3, 0, 0]}>
+                                    {chartRows.map((r, i) => (
+                                        <Cell key={i} fill={r.contribution_value >= 0 ? BAR_COLOR_POS : BAR_COLOR_NEG} fillOpacity={0.85} />
+                                    ))}
+                                </Bar>
+                                <Line
+                                    yAxisId="rate"
+                                    type="linear"
+                                    dataKey="contribution_per_kg"
+                                    stroke={LINE_COLOR}
+                                    strokeWidth={2}
+                                    dot={{ fill: LINE_COLOR, r: 3 }}
+                                    activeDot={{ r: 5 }}
+                                />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── Best / worst performers — the answer to "what should I look at" without opening a spreadsheet ── */}
+            <BreakdownGrid
+                rupee
+                className="md:grid-cols-2 xl:grid-cols-2"
+                groups={[
+                    {
+                        title: "Top 8 Performers / kg",
+                        rows: [...curRows]
+                            .sort((a, b) => b.contribution_per_kg - a.contribution_per_kg)
+                            .slice(0, 8)
+                            .map(r => ({ label: r.product_name, value: r.contribution_per_kg })),
+                    },
+                    {
+                        title: "Lowest 8 Performers / kg",
+                        rows: [...curRows]
+                            .sort((a, b) => a.contribution_per_kg - b.contribution_per_kg)
+                            .slice(0, 8)
+                            .map(r => ({ label: r.product_name, value: r.contribution_per_kg })),
+                    },
+                ]}
+            />
 
             {/* ── Constants pill row ── */}
             {constants && (
@@ -301,13 +322,30 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
                 </div>
             )}
 
-            {/* ── Product Table ── */}
+            {/* ── Full product table — collapsed by default; this is the "raw data" escape hatch, ── */}
+            {/* ── not the primary way to read the page ── */}
+            {!showFullTable ? (
+                <button
+                    onClick={() => setShowFullTable(true)}
+                    className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-colors text-left"
+                >
+                    <span className="flex items-center gap-2.5">
+                        <Table2 size={15} className="text-primary shrink-0" />
+                        <span className="text-sm font-medium text-foreground">View full product table</span>
+                        <span className="text-xs text-muted-foreground">— all {curRows.length} SKUs, sortable &amp; filterable</span>
+                    </span>
+                    <ChevronRight size={15} className="text-muted-foreground shrink-0" />
+                </button>
+            ) : (
             <Card className="card-elevated">
                 <CardHeader className="py-2 px-4">
                     <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider shrink-0">
-                            Product Contribution — {cur}
-                        </CardTitle>
+                        <button onClick={() => setShowFullTable(false)} className="flex items-center gap-1.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                            <ChevronDown size={13} />
+                            <CardTitle className="text-xs font-semibold uppercase tracking-wider">
+                                Product Contribution — {cur}
+                            </CardTitle>
+                        </button>
                         <div className="flex-1" />
 
                         {/* Search */}
@@ -533,6 +571,7 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
                     </div>
                 )}
             </Card>
+            )}
         </div>
     );
 }

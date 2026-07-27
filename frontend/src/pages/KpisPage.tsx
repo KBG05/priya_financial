@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GroupedKpiTable, type KpiGroup } from "@/components/GroupedKpiTable";
 import { TrendChart } from "@/components/TrendChart";
-import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
+import { StatStrip } from "@/components/StatStrip";
 import { api } from "@/api";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
@@ -64,42 +64,36 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
 
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex flex-col xl:flex-row gap-4">
-                <div className="flex-1 min-w-0">
-                    <TrendChart
-                        title={`${trendOption} Trend`}
-                        data={trendData}
-                        dataKey="value"
-                        options={trendOptions}
-                        selectedOption={trendOption}
-                        onOptionChange={setTrendOption}
-                        pct={trendOption !== "EPS" && trendOption !== "EV (Enterprise Value)" && trendOption !== "PE Ratio" && !trendOption.includes("Days")}
-                    />
-                </div>
-                {/* 4 KPI highlight cards with sparkline */}
-                <HeroMetricsPanel
-                    metrics={HIGHLIGHT_KPIS.map(name => ({
-                        title: name,
-                        value: viewMode !== "single" ? (aggKpis[name] ?? null) : kv(name, cur),
-                        prevValue: viewMode !== "single" ? kv(name, cur) : kv(name, prev),
-                        history: sparkSeries(name),
-                        pct: true,
-                        deltaMode: "default",
-                    }))}
-                />
-            </div>
+            <StatStrip
+                leadFirst
+                stats={HIGHLIGHT_KPIS.map(name => ({
+                    title: name,
+                    value: viewMode !== "single" ? (aggKpis[name] ?? null) : kv(name, cur),
+                    prevValue: viewMode !== "single" ? kv(name, cur) : kv(name, prev),
+                    history: sparkSeries(name),
+                    pct: true,
+                    deltaMode: "default" as const,
+                }))}
+            />
+
+            <TrendChart
+                title={`${trendOption} Trend`}
+                data={trendData}
+                dataKey="value"
+                options={trendOptions}
+                selectedOption={trendOption}
+                onOptionChange={setTrendOption}
+                pct={trendOption !== "EPS" && trendOption !== "EV (Enterprise Value)" && trendOption !== "PE Ratio" && !trendOption.includes("Days")}
+            />
 
             {/* Grouped collapsible KPI table */}
-            <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 px-1">All KPIs</p>
-                <GroupedKpiTable
-                    groups={KPI_GROUPS}
-                    allData={allData}
-                    months={months}
-                    viewMode={viewMode}
-                    curMonth={cur}
-                />
-            </div>
+            <GroupedKpiTable
+                groups={KPI_GROUPS}
+                allData={allData}
+                months={months}
+                viewMode={viewMode}
+                curMonth={cur}
+            />
         </div>
     );
 }

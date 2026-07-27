@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DetailedBreakdown } from "@/components/DetailedBreakdown";
+import { LedgerBoard } from "@/components/LedgerBoard";
+import { BreakdownGrid } from "@/components/BreakdownGrid";
 import { TrendChart } from "@/components/TrendChart";
-import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
+import { StatStrip } from "@/components/StatStrip";
 import { api } from "@/api";
 import { buildLedgerData } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
@@ -54,32 +55,55 @@ export function DirectExpensesPage({ months, viewMode, fy }: Props) {
         ? data.filter(r => r.month === cur).reduce((s, r) => s + (r.value ?? 0), 0)
         : data.filter(r => months.includes(r.month)).reduce((s, r) => s + (r.value ?? 0), 0);
 
+    const catTotal = (cat: string) => data
+        .filter(r => (viewMode === "single" ? r.month === cur : months.includes(r.month)) && r.category === cat)
+        .reduce((s, r) => s + (r.value ?? 0), 0);
+
+    const groupsRaw = categories.map(cat => {
+        const items = [...new Set(data.filter((r: any) => r.category === cat).map((r: any) => r.line_item))];
+        return { title: cat, ...buildLedgerData(data, "line_item", "value", items, viewMode, months, { rupee: true }) };
+    });
+    const cols = groupsRaw[0]?.cols ?? [{ key: "line_item", header: "Item", isLabel: true }];
+
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex flex-col xl:flex-row gap-4">
-                <div className="flex-1 min-w-0">
-                    <TrendChart
-                        title={`${trendOption} Trend`}
-                        data={trendData}
-                        dataKey="value"
-                        options={trendOptions}
-                        selectedOption={trendOption}
-                        onOptionChange={setTrendOption}
-                        rupee
-                    />
-                </div>
-                <HeroMetricsPanel
-                    metrics={[
-                        { title: "Total Direct Expenses", value: curTotal, prevValue: undefined, rupee: true, deltaMode: "inverse" }
-                    ]}
-                />
-            </div>
+            <StatStrip
+                leadFirst
+                stats={[
+                    { title: "Total Direct Expenses", value: curTotal, prevValue: undefined, rupee: true, deltaMode: "inverse" },
+                    ...categories.slice(0, 4).map(cat => ({ title: cat, value: catTotal(cat), rupee: true, deltaMode: "neutral" as const })),
+                ]}
+            />
 
-            <DetailedBreakdown sections={categories.map(cat => {
-                const items = [...new Set(data.filter((r: any) => r.category === cat).map((r: any) => r.line_item))];
-                const { cols, rows } = buildLedgerData(data, "line_item", "value", items, viewMode, months, { rupee: true });
-                return { title: `📂 ${cat}`, cols, rows };
-            })} />
+            <TrendChart
+                title={`${trendOption} Trend`}
+                data={trendData}
+                dataKey="value"
+                options={trendOptions}
+                selectedOption={trendOption}
+                onOptionChange={setTrendOption}
+                rupee
+            />
+
+            {viewMode === "single" ? (
+                <BreakdownGrid
+                    rupee
+                    groups={categories.map(cat => ({
+                        title: cat,
+                        rows: [...new Set(data.filter((r: any) => r.category === cat).map((r: any) => r.line_item))]
+                            .map(item => ({
+                                label: item,
+                                value: data.find((r: any) => r.category === cat && r.line_item === item && r.month === cur)?.value ?? null,
+                            })),
+                    }))}
+                />
+            ) : (
+                <LedgerBoard
+                    cols={cols}
+                    defaultOpenCount={2}
+                    groups={groupsRaw.map(g => ({ title: g.title, rows: g.rows }))}
+                />
+            )}
         </div>
     );
 }

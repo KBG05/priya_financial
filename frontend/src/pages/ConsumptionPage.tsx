@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendChart } from "@/components/TrendChart";
-import { DetailedBreakdown } from "@/components/DetailedBreakdown";
-import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
+import { LedgerBoard } from "@/components/LedgerBoard";
+import { BreakdownGrid } from "@/components/BreakdownGrid";
+import { StatStrip } from "@/components/StatStrip";
 import type { ColDef } from "@/components/LedgerTable";
 import { api } from "@/api";
 import { fmt } from "@/lib/format";
@@ -40,7 +41,7 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
 
     if (loading) return (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28" />)}
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
     );
 
@@ -71,8 +72,10 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
         };
     });
 
+    /** Builds a component table for one material — always uses the full selected `months` set
+     *  (rather than only months where that material has data) so every material shares identical columns
+     *  and can live in one unified ledger. */
     const buildMatTable = (mat: string): { cols: ColDef[]; rows: Record<string, string>[] } => {
-        const avail = months.filter(m => data.some(r => r.material === mat && r.month === m));
         if (viewMode === "single") {
             const row = data.find(r => r.material === mat && r.month === cur);
             return {
@@ -90,9 +93,7 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
                 })),
             };
         }
-        const orderedM = viewMode === "mty-all"
-            ? [avail[avail.length - 1], ...avail.slice(0, -1)]
-            : avail;
+        const orderedM = viewMode === "mty-all" ? [months[months.length - 1], ...months.slice(0, -1)] : months;
         const cols: ColDef[] = [
             { key: "label", header: "Component", isLabel: true },
             ...orderedM.flatMap(m => [
@@ -112,48 +113,52 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
         return { cols, rows };
     };
 
+    const groupsRaw = materials.map(mat => ({ title: mat, ...buildMatTable(mat) }));
+    const cols = groupsRaw[0]?.cols ?? [{ key: "label", header: "Component", isLabel: true }];
+
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex flex-col xl:flex-row gap-4">
-                <div className="flex-1 min-w-0">
-                    <TrendChart
-                        title={`${trendOption} Trend`}
-                        data={trendData}
-                        dataKey="value"
-                        combo
-                        barKey="value"
-                        lineKey="rate"
-                        qtyKey="qty"
-                        options={materials}
-                        selectedOption={trendOption}
-                        onOptionChange={setTrendOption}
-                        barRupee
-                        lineRupee
-                    />
-                </div>
-                <HeroMetricsPanel
-                    metrics={[
-                        { title: "Total Value", value: totVal, prevValue: prevTotVal, rupee: true, deltaMode: "neutral" },
-                        { title: "Total Qty", value: totQty, prevValue: prevTotQty, deltaMode: "neutral" },
-                    ]}
-                />
-            </div>
+            <StatStrip
+                leadFirst
+                stats={[
+                    { title: "Total Value", value: totVal, prevValue: prevTotVal, rupee: true, deltaMode: "neutral" },
+                    { title: "Total Qty", value: totQty, prevValue: prevTotQty, deltaMode: "neutral" },
+                ]}
+            />
 
-            <DetailedBreakdown sections={materials.map(mat => {
-                const rd = curData.find(r => r.material === mat);
-                const prevRd = prevCurData.find(r => r.material === mat);
-                const { cols, rows } = buildMatTable(mat);
-                return {
-                    title: mat,
-                    cols,
-                    rows,
-                    heroes: [
-                        { title: "Qty", value: rd?.qty ?? null, prevValue: prevRd?.qty ?? null, deltaMode: "neutral" as const },
-                        { title: "Value", value: rd?.value ?? null, prevValue: prevRd?.value ?? null, rupee: true, deltaMode: "neutral" as const },
-                        { title: "Rate", value: rd?.rate ?? null, prevValue: prevRd?.rate ?? null, deltaMode: "neutral" as const },
-                    ],
-                };
-            })} />
+            <TrendChart
+                title={`${trendOption} Trend`}
+                data={trendData}
+                dataKey="value"
+                combo
+                barKey="value"
+                lineKey="rate"
+                qtyKey="qty"
+                options={materials}
+                selectedOption={trendOption}
+                onOptionChange={setTrendOption}
+                barRupee
+                lineRupee
+            />
+
+            {viewMode === "single" ? (
+                <BreakdownGrid
+                    rupee
+                    groups={materials.map(mat => {
+                        const row = data.find(r => r.material === mat && r.month === cur);
+                        return {
+                            title: mat,
+                            rows: COMPS.map(c => ({ label: c.label, value: row?.[c.vk] ?? null })),
+                        };
+                    })}
+                />
+            ) : (
+                <LedgerBoard
+                    cols={cols}
+                    defaultOpenCount={1}
+                    groups={groupsRaw.map(g => ({ title: g.title, rows: g.rows }))}
+                />
+            )}
         </div>
     );
 }

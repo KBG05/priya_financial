@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:ital,opsz,wght@0,14..32,400..800;1,14..32,400..700&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -33,84 +33,79 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
   --font-sans: 'Inter', system-ui, sans-serif;
-  --radius: 0.5rem;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --radius: 0.625rem;
 }
 
 :root {
-  /* Light — off-white page, elevated white cards, teal primary, amber accent */
-  --background: 220 18% 93%;
-  --foreground: 222 25% 10%;
+  /* Light — cool paper background tinted toward brand teal, sharp deep-teal primary */
+  --background: 200 22% 95%;
+  --foreground: 210 32% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 222 25% 10%;
+  --card-foreground: 210 32% 12%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 25% 10%;
-  --primary: 173 42% 34%;
-  /* deep mint — base of #BADFDB */
+  --popover-foreground: 210 32% 12%;
+  --primary: 175 68% 26%;
+  /* confident deep teal — sharper than a pastel mint */
   --primary-foreground: 0 0% 100%;
-  --secondary: 174 22% 86%;
-  --secondary-foreground: 174 42% 22%;
-  --muted: 220 14% 88%;
-  --muted-foreground: 220 12% 44%;
-  --accent: 38 72% 86%;
-  --accent-foreground: 38 62% 28%;
-  --destructive: 0 70% 50%;
+  --secondary: 178 28% 90%;
+  --secondary-foreground: 176 55% 18%;
+  --muted: 200 16% 91%;
+  --muted-foreground: 208 12% 40%;
+  --accent: 200 16% 89%;
+  /* neutral hover/emphasis tone — not a second decorative color */
+  --accent-foreground: 210 28% 16%;
+  --positive: 175 55% 30%;
+  --destructive: 6 72% 46%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 16% 74%;
-  /* visible but not harsh */
-  --input: 220 16% 74%;
-  --ring: 173 42% 34%;
-  --table-header-bg: 173 37% 82%;
-  /* ≈ #BADFDB tint */
+  --border: 204 16% 80%;
+  --input: 204 16% 78%;
+  --ring: 175 68% 26%;
+  --table-header-bg: 176 40% 88%;
 
-  --sidebar-background: 222 24% 12%;
+  --sidebar-background: 210 30% 11%;
   --sidebar-foreground: 0 0% 88%;
-  /* near-white — sidebar is always dark bg */
-  --sidebar-primary: 174 50% 50%;
+  --sidebar-primary: 175 60% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 173 32% 20%;
-  /* dark mint bg for active */
-  --sidebar-accent-foreground: 173 37% 80%;
-  /* = #BADFDB */
-  --sidebar-border: 222 18% 22%;
-  --sidebar-ring: 173 42% 34%;
+  --sidebar-accent: 175 32% 20%;
+  --sidebar-accent-foreground: 176 40% 82%;
+  --sidebar-border: 210 22% 20%;
+  --sidebar-ring: 175 68% 26%;
 }
 
 .dark {
-  --background: 222 28% 7%;
-  --foreground: 220 16% 90%;
-  --card: 222 24% 12%;
-  --card-foreground: 220 16% 90%;
-  --popover: 222 22% 15%;
+  --background: 208 32% 6%;
+  --foreground: 200 18% 92%;
+  --card: 208 26% 9.5%;
+  --card-foreground: 200 18% 92%;
+  --popover: 208 24% 12%;
   /* lifted above card for depth */
-  --popover-foreground: 220 16% 90%;
-  --primary: 173 37% 80%;
-  /* #BADFDB in dark mode */
-  --primary-foreground: 222 28% 8%;
-  --secondary: 222 20% 20%;
-  --secondary-foreground: 220 14% 84%;
-  --muted: 222 20% 16%;
-  --muted-foreground: 220 12% 52%;
-  --accent: 222 20% 20%;
-  --accent-foreground: 174 50% 70%;
-  --destructive: 0 60% 50%;
+  --popover-foreground: 200 18% 92%;
+  --primary: 174 62% 55%;
+  /* bright confident mint — pops against dark */
+  --primary-foreground: 210 34% 8%;
+  --secondary: 208 20% 17%;
+  --secondary-foreground: 200 16% 86%;
+  --muted: 208 20% 14%;
+  --muted-foreground: 205 12% 58%;
+  --accent: 208 20% 17%;
+  --accent-foreground: 174 50% 72%;
+  --positive: 174 55% 55%;
+  --destructive: 6 72% 58%;
   --destructive-foreground: 0 0% 100%;
-  --border: 222 16% 28%;
-  /* notably more visible in dark */
-  --input: 222 16% 28%;
-  --ring: 173 37% 80%;
-  --table-header-bg: 173 28% 16%;
-  /* dimmed #BADFDB family */
+  --border: 208 18% 22%;
+  --input: 208 18% 24%;
+  --ring: 174 62% 55%;
+  --table-header-bg: 176 30% 14%;
 
-  --sidebar-background: 222 28% 6%;
-  --sidebar-foreground: 220 12% 78%;
-  --sidebar-primary: 174 50% 50%;
-  --sidebar-primary-foreground: 222 28% 8%;
-  --sidebar-accent: 173 28% 16%;
-  /* dark mint bg */
-  --sidebar-accent-foreground: 173 37% 80%;
-  /* = #BADFDB */
-  --sidebar-border: 222 20% 16%;
-  --sidebar-ring: 173 37% 80%;
+  --sidebar-background: 208 32% 5%;
+  --sidebar-foreground: 205 12% 80%;
+  --sidebar-primary: 174 55% 50%;
+  --sidebar-primary-foreground: 210 34% 8%;
+  --sidebar-accent: 176 30% 14%;
+  --sidebar-accent-foreground: 174 50% 72%;
+  --sidebar-border: 208 20% 14%;
+  --sidebar-ring: 174 62% 55%;
 }
 
 /* ── Base ───────────────────────────────── */
@@ -123,6 +118,12 @@ body {
   margin: 0;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+/* ── Display type — brand name, page/section titles, hero numerals ── */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
 }
 
 /* ── Radix collapsible animation ──────────── */
@@ -202,7 +203,7 @@ body {
   border-radius: 3px;
 }
 
-/* ── Tabular numbers ──────────────────────── */
+/* ── Tabular numbers — every figure in the product uses this ── */
 .tabnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
@@ -211,9 +212,23 @@ body {
 
 /* ── Card elevation ───────────────────────── */
 .card-elevated {
-  box-shadow: 0 2px 12px -2px hsl(220 30% 8% / 0.08), 0 1px 3px -1px hsl(220 30% 8% / 0.05);
+  box-shadow: 0 1px 2px -1px hsl(210 32% 8% / 0.06), 0 3px 10px -4px hsl(210 32% 8% / 0.08);
 }
 
 .dark .card-elevated {
-  box-shadow: 0 4px 24px -4px hsl(0 0% 0% / 0.45), 0 1px 6px -1px hsl(0 0% 0% / 0.28);
+  box-shadow: 0 1px 2px -1px hsl(0 0% 0% / 0.3), 0 6px 20px -6px hsl(0 0% 0% / 0.5);
+}
+
+/* ── Sticky-column separation while a ledger table scrolls horizontally ── */
+.sticky-col-shadow {
+  box-shadow: 2px 0 4px -2px hsl(210 32% 8% / 0.12);
+}
+
+.dark .sticky-col-shadow {
+  box-shadow: 2px 0 6px -2px hsl(0 0% 0% / 0.4);
+}
+
+/* ── Positive / negative figure color, independent of link/accent color ── */
+.text-positive {
+  color: hsl(var(--positive));
 }
