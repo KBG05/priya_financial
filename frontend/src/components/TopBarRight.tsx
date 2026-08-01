@@ -84,6 +84,56 @@ function TogglePair({ value, options, onChange }: {
     );
 }
 
+/**
+ * Month + "replace existing" scope for one ingestion section. Each section is
+ * ingested independently, so each carries its own scope.
+ */
+function ScopeRow({ idPrefix, month, onMonthChange, replace, onReplaceChange, disabled }: {
+    idPrefix: string;
+    month: string;
+    onMonthChange: (v: string) => void;
+    replace: boolean;
+    onReplaceChange: (v: boolean) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className={`flex items-end gap-3 pt-1 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
+            <div className="flex flex-col gap-1.5">
+                <FieldLabel
+                    label="Month"
+                    info="Only this month is written for this section; other months are always preserved. Leave as 'All months' to refresh every month in the file."
+                />
+                <Select value={month} onValueChange={onMonthChange}>
+                    <SelectTrigger className="w-28 h-8 text-xs bg-background border-border">
+                        <SelectValue placeholder="All months" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__all__" className="text-xs text-muted-foreground">All months</SelectItem>
+                        {MONTH_ORDER.map(m => (
+                            <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="flex items-center gap-2 pb-2">
+                <input
+                    id={`${idPrefix}-replace`}
+                    type="checkbox"
+                    checked={replace}
+                    onChange={e => onReplaceChange(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-primary"
+                />
+                <label
+                    htmlFor={`${idPrefix}-replace`}
+                    className="text-[11px] text-muted-foreground cursor-pointer select-none"
+                >
+                    Replace existing
+                </label>
+            </div>
+        </div>
+    );
+}
+
 /** Given "25_26" returns "26_27" */
 function nextFySuffix(suffix: string): string {
     const [, b] = suffix.split("_");
@@ -124,10 +174,14 @@ export function TopBarRight({ fy, availableFYs }: Props) {
     // Section 4: Item sales / contribution (optional)
     const [itemSalesFile, setItemSalesFile] = useState<File | null>(null);
 
-    // Config
+    // Config — FY is shared; month/replace are per section.
+    // Core section covers core financials + balance sheet (they come from the
+    // same monthly export); item section covers item sales/purchases.
     const [selectedFy, setSelectedFy] = useState(fy);
-    const [selectedMonth, setSelectedMonth] = useState<string>("__all__");
-    const [replaceExisting, setReplaceExisting] = useState(false);
+    const [coreMonth, setCoreMonth] = useState<string>("__all__");
+    const [coreReplace, setCoreReplace] = useState(false);
+    const [itemMonth, setItemMonth] = useState<string>("__all__");
+    const [itemReplace, setItemReplace] = useState(false);
 
     // Status
     const [status, setStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
@@ -137,8 +191,14 @@ export function TopBarRight({ fy, availableFYs }: Props) {
 
     const busy = status === "running";
 
+    // Every file is optional and ingested independently — any single one is a
+    // valid upload. Only require that at least one file is present.
+    const hasAnyFile = Boolean(
+        coreFile || balFile || salaryFile || itemSalesFile
+    );
+
     const handleSubmit = async () => {
-        if (!coreFile && !itemSalesFile) return;
+        if (!hasAnyFile) return;
         setStatus("running");
         setLogs("");
         setErrorStage("");
@@ -153,8 +213,14 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                 salaryFile,
                 itemSalesFile,
                 fy: selectedFy,
-                months: selectedMonth === "__all__" ? "" : selectedMonth,
-                replaceExisting,
+                // Shared fields kept for backward compatibility; the backend
+                // prefers the per-section values below.
+                months: coreMonth === "__all__" ? "" : coreMonth,
+                replaceExisting: coreReplace,
+                coreMonths: coreMonth === "__all__" ? "" : coreMonth,
+                coreReplace,
+                itemMonths: itemMonth === "__all__" ? "" : itemMonth,
+                itemReplace,
             });
             if (res.ok) {
                 setLogs(res.logs);
@@ -191,7 +257,9 @@ export function TopBarRight({ fy, availableFYs }: Props) {
 
                     <div className="flex flex-col gap-5 px-6 pb-6">
 
-                        {/* ── Section 1: Core Financials ────────────────── */}
+                        {/* ── Section 1: Core Financials + Balance Sheet ──
+                            One section: both come from the same monthly export,
+                            so they share a single month / replace scope. ── */}
                         <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
                             <FieldLabel
                                 label="Core Financials"
@@ -208,10 +276,9 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                     ? 'Upload "8. MIS Nov 25.xlsx" — contains all required sheets.'
                                     : 'Upload "Sales_Pur_Exps-Nov.25.xlsx" — Tally export with Purchase, Inventory Sales, Direct & Indirect Expns, Stock Valuation sheets.'}
                             </p>
-                        </div>
 
-                        {/* ── Section 2: Balance Sheet ──────────────────── */}
-                        <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
+                            <Separator />
+
                             <FieldLabel
                                 label="Balance Sheet"
                                 info="Required for MTY and KPI calculations. If you uploaded the MIS file above, select 'Same as core' to reuse it. Otherwise upload the BS_PL_CF Tally export (BS_PL_CF-Nov.25.xlsx)."
@@ -236,6 +303,17 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                         : "⚠ Core is not a MIS file — balance sheet / KPIs will be skipped."}
                                 </p>
                             )}
+
+                            <Separator />
+
+                            <ScopeRow
+                                idPrefix="core"
+                                month={coreMonth}
+                                onMonthChange={setCoreMonth}
+                                replace={coreReplace}
+                                onReplaceChange={setCoreReplace}
+                                disabled={!coreFile && !balFile}
+                            />
                         </div>
 
                         {/* ── Section 3: Salary (optional) ─────────────── */}
@@ -251,9 +329,20 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                         <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
                             <FieldLabel
                                 label="Latest Item Sales (optional)"
-                                info="Product-level monthly sales data used for Contribution analysis. Upload a monthly item-sales Excel file. Requires a specific month to be selected below."
+                                info="Product-level monthly sales and purchases used for Contribution analysis. Ingested independently of the core financials, with its own month and replace scope."
                             />
                             <FilePicker id="item" file={itemSalesFile} onChange={setItemSalesFile} />
+
+                            <Separator />
+
+                            <ScopeRow
+                                idPrefix="item"
+                                month={itemMonth}
+                                onMonthChange={setItemMonth}
+                                replace={itemReplace}
+                                onReplaceChange={setItemReplace}
+                                disabled={!itemSalesFile}
+                            />
                         </div>
 
                         <Separator />
@@ -276,42 +365,16 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                 </Select>
                             </div>
 
-                            <div className="flex flex-col gap-1.5">
-                                <FieldLabel
-                                    label="Month Filter"
-                                    info="If set, only the selected month is updated; existing months in the DB are preserved. Leave blank to refresh all months in the file."
-                                />
-                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                    <SelectTrigger className="w-28 h-8 text-xs bg-background border-border">
-                                        <SelectValue placeholder="All months" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__all__" className="text-xs text-muted-foreground">All months</SelectItem>
-                                        {MONTH_ORDER.map(m => (
-                                            <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex items-center gap-2 pb-0.5">
-                                <input
-                                    id="replace"
-                                    type="checkbox"
-                                    checked={replaceExisting}
-                                    onChange={e => setReplaceExisting(e.target.checked)}
-                                    className="w-3.5 h-3.5 accent-primary"
-                                />
-                                <label htmlFor="replace" className="text-[11px] text-muted-foreground cursor-pointer select-none">
-                                    Replace existing
-                                </label>
-                            </div>
+                            <p className="text-[10px] text-muted-foreground pb-2 max-w-[15rem] leading-relaxed">
+                                Month and “Replace existing” are set per section above — each
+                                file is ingested independently.
+                            </p>
                         </div>
 
                         {/* ── Submit ───────────────────────────────────── */}
                         <Button
                             onClick={handleSubmit}
-                            disabled={busy || (!coreFile && !itemSalesFile)}
+                            disabled={busy || !hasAnyFile}
                             className="w-full gap-2"
                         >
                             {busy

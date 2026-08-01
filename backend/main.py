@@ -246,6 +246,12 @@ async def upload_and_process(
     fy: str = Form(FY),
     months: str = Form(""),
     replace_existing: bool = Form(False),
+    # Per-section overrides. Blank/absent falls back to the shared values above,
+    # so older clients keep working unchanged.
+    core_months: str = Form(""),
+    core_replace: Optional[bool] = Form(None),
+    item_months: str = Form(""),
+    item_replace: Optional[bool] = Form(None),
 ):
     """
     Upload files and immediately run the full ingestion + calculation pipeline.
@@ -310,12 +316,15 @@ async def upload_and_process(
         _save_upload(salary_file, "salary", sal_bytes)
 
     # ── Parse months ─────────────────────────────────────────────────────
-    selected_months = None
-    if months.strip():
-        try:
-            selected_months = _parse_months_arg(months)
-        except ValueError as e:
-            return {"ok": False, "error": str(e), "logs": ""}
+    def _months_or_none(raw: str):
+        return _parse_months_arg(raw) if raw.strip() else None
+
+    try:
+        selected_months = _months_or_none(months)
+        parsed_core_months = _months_or_none(core_months)
+        parsed_item_months = _months_or_none(item_months)
+    except ValueError as e:
+        return {"ok": False, "error": str(e), "logs": ""}
 
     # ── Run pipeline (capture + echo logs) ───────────────────────────────
     log_buf = io.StringIO()
@@ -343,6 +352,10 @@ async def upload_and_process(
                 selected_months=selected_months,
                 replace_existing=replace_existing,
                 balance_is_mis=balance_is_mis,
+                core_months=parsed_core_months,
+                core_replace=core_replace,
+                item_months=parsed_item_months,
+                item_replace=item_replace,
             )
         ok = True
     except BaseException as exc:

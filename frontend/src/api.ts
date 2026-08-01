@@ -27,6 +27,13 @@ export const api = {
         fy: string;
         months: string;
         replaceExisting?: boolean;
+        // Per-section scope. Core covers core financials + balance sheet;
+        // item covers item sales/purchases. Omit to fall back to the shared
+        // months / replaceExisting above.
+        coreMonths?: string;
+        coreReplace?: boolean;
+        itemMonths?: string;
+        itemReplace?: boolean;
     }) => {
         const form = new FormData();
         if (params.coreFile) form.append("core_file", params.coreFile);
@@ -36,6 +43,10 @@ export const api = {
         form.append("fy", params.fy);
         form.append("months", params.months);
         form.append("replace_existing", String(params.replaceExisting ?? false));
+        if (params.coreMonths !== undefined) form.append("core_months", params.coreMonths);
+        if (params.coreReplace !== undefined) form.append("core_replace", String(params.coreReplace));
+        if (params.itemMonths !== undefined) form.append("item_months", params.itemMonths);
+        if (params.itemReplace !== undefined) form.append("item_replace", String(params.itemReplace));
         const res = await fetch(`${BASE}/upload-and-process`, { method: "POST", body: form });
         if (!res.ok) throw new Error("Upload & process failed");
         return res.json() as Promise<{ ok: boolean; logs: string; user_message?: string | null; error_stage?: string | null; error_detail?: string | null }>;
