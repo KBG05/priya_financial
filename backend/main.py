@@ -307,7 +307,8 @@ def get_quote_builder_stock(code: int):
         return {"data": [], "warning": "No stock snapshot ingested yet."}
     return {
         "data": query(
-            """SELECT location, SUM(bales) AS bales, MAX(as_of_date) AS as_of_date
+            """SELECT location, SUM(bales) AS bales, SUM(qty_kgs) AS qty_kgs,
+                    MAX(as_of_date) AS as_of_date
                FROM current_stock WHERE code = :code
                GROUP BY location""",
             {"code": code},

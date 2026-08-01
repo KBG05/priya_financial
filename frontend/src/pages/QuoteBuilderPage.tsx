@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, X, RotateCcw } from "lucide-react";
+import { Search, X, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,12 @@ export function QuoteBuilderPage({ fy }: Props) {
     const purchRate = parseFloat(purchaseRate) || 0;
 
     const proposedSalePrice = wtPerMt > 0 ? ceilingToStep(rate / wtPerMt, 0.5) : 0;
+    const ratePerKgHint = wtPerMt > 0 && rate > 0 ? rate / wtPerMt : 0;
+
+    const stockTotalKg = stock.reduce((s, r) => s + (r.qty_kgs ?? 0), 0);
+    const stockTotalBales = stock.reduce((s, r) => s + (r.bales ?? 0), 0);
+    const stockShortfallKg = qty > 0 ? qty - stockTotalKg : 0;
+    const stockCovers = qty > 0 && stockTotalKg >= qty;
 
     const liveVariableCost = sourcing === "Produce in-house"
         ? (sku?.mfg_cost_per_kg ?? 0)
@@ -203,17 +209,40 @@ export function QuoteBuilderPage({ fy }: Props) {
                             <Row label="Mfg Cost ₹/Kg (live)" value={fmt(sku.mfg_cost_per_kg)} />
                             <Row label="Hist Purchase Rate ₹/Kg" value={fmt(sku.hist_purchase_rate_per_kg)} />
                             <Row label="Hist Avg SP ₹/Kg" value={fmt(sku.hist_avg_sp_per_kg)} />
-                            <Row label="Wt/Mt (kg per metre)" value={wtPerMt ? wtPerMt.toFixed(4) : "—"} />
+                            <Row
+                                label="Wt/Mt"
+                                value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
+                            />
                             {sku.month && (
                                 <span className="text-[10px] text-muted-foreground mt-1">Costing basis: {sku.month}</span>
                             )}
                             <div className="mt-2 pt-2 border-t border-border/30">
-                                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Bales in stock</div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
+                                    {stock.length > 0 && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                            as of {stock[0].as_of_date}
+                                        </span>
+                                    )}
+                                </div>
                                 {stock.length === 0 ? (
-                                    <span className="text-muted-foreground">No stock snapshot for this SKU.</span>
-                                ) : stock.map(s => (
-                                    <Row key={s.location} label={s.location} value={`${fmt(s.bales)} bales`} />
-                                ))}
+                                    <span className="text-muted-foreground">No stock snapshot for this SKU — likely zero on hand at last count.</span>
+                                ) : (
+                                    <>
+                                        {stock.map(s => (
+                                            <Row
+                                                key={s.location}
+                                                label={s.location}
+                                                value={`${fmt(s.bales)} bales · ${fmt(s.qty_kgs)} kg`}
+                                            />
+                                        ))}
+                                        <Row
+                                            label="Total across units"
+                                            value={`${fmt(stockTotalBales)} bales · ${fmt(stockTotalKg)} kg`}
+                                            emphasize
+                                        />
+                                    </>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -237,8 +266,13 @@ export function QuoteBuilderPage({ fy }: Props) {
                                     </SelectContent>
                                 </Select>
                             </Field>
-                            <Field label="Rate per Mt (₹)">
+                            <Field label="Rate per Mt (₹/Metre)">
                                 <Input type="number" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-8 text-xs" placeholder="0.00" />
+                                {ratePerKgHint > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                        ≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt
+                                    </span>
+                                )}
                             </Field>
                             <Field label="Proposed Sale Price ₹/Kg (auto)">
                                 <div className="h-8 flex items-center px-2 rounded-md border border-border/50 bg-muted/30 font-semibold tabular-nums">
@@ -250,6 +284,16 @@ export function QuoteBuilderPage({ fy }: Props) {
                             )}
                             <Field label="Proposed Quantity (Kgs)">
                                 <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-8 text-xs" />
+                                {qty > 0 && (
+                                    <span className={`flex items-center gap-1 text-[10px] ${stockCovers ? "text-primary" : "text-amber-600 dark:text-amber-400"}`}>
+                                        {stockCovers ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                                        {stockTotalKg <= 0
+                                            ? "No stock on hand — this quantity will need fresh production."
+                                            : stockCovers
+                                            ? `Covered by stock in hand (${fmt(stockTotalKg)} kg available).`
+                                            : `Exceeds stock in hand by ${fmt(stockShortfallKg)} kg (${fmt(stockTotalKg)} kg available) — shortfall needs production.`}
+                                    </span>
+                                )}
                             </Field>
                             {sourcing === "Purchase & resell" && (
                                 <Field label="Purchase Rate ₹/Kg">

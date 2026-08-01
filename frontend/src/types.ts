@@ -72,5 +72,6 @@ export interface QuoteBuilderSku {
 export interface QuoteBuilderStockRow {
     location: string;
     bales: number;
+    qty_kgs: number;
     as_of_date: string;
 }
