@@ -20,8 +20,9 @@ fabrication_charge_per_kg is recomputed per row from that row's own geometry
 weight = 0 (codes 402, 416, 509, 511, 522, 534 — blank Wt/Mt in the master too)
 keep per_kg = 0; none of them have sales.
 
-Run:  uv run python update_spec_from_ratio_master_v2.py [--commit]
-Without --commit it prints the diff and rolls back.
+Run:  uv run python update_spec_from_ratio_master_v2.py [PATH_TO_XLSX] [--commit]
+Without --commit it prints the diff and rolls back. PATH_TO_XLSX defaults to the
+local checkout location; pass it explicitly on other machines.
 """
 import sys
 from collections import defaultdict
@@ -36,9 +37,9 @@ RATIO_MASTER_V2 = Path("/home/kbg/Documents/PriyaFil/Ratio Masterv2.xlsx")
 SHEET = "UPDATED"
 
 
-def load_master():
+def load_master(path: Path = RATIO_MASTER_V2):
     """code -> (name, rate_per_mt, wt_per_mt), collapsing duplicate rows."""
-    ws = openpyxl.load_workbook(RATIO_MASTER_V2, data_only=True)[SHEET]
+    ws = openpyxl.load_workbook(path, data_only=True)[SHEET]
     grouped = defaultdict(list)
     for r in ws.iter_rows(min_row=2, values_only=True):
         if r[0] is None:
@@ -57,8 +58,9 @@ def load_master():
     return master
 
 
-def main(commit: bool):
-    master = load_master()
+def main(commit: bool, path: Path = RATIO_MASTER_V2):
+    print(f"Master: {path}")
+    master = load_master(path)
     conn = get_connection()
 
     specs = conn.execute(
@@ -132,4 +134,5 @@ def main(commit: bool):
 
 
 if __name__ == "__main__":
-    main("--commit" in sys.argv)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    main("--commit" in sys.argv, Path(args[0]) if args else RATIO_MASTER_V2)
