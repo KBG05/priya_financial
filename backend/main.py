@@ -216,6 +216,104 @@ def get_contribution(months: str = Query(...), fy: str = Query(FY)):
     }
 
 
+# ─── Quote Builder ─────────────────────────────────────────────────────────
+
+@app.get("/quote_builder/skus")
+def get_quote_builder_skus(fy: str = Query(FY)):
+    """SKU code + name list for the Quote Builder's searchable dropdown."""
+    return {
+        "data": query(
+            """SELECT product_code AS code, MIN(product_name) AS product_name
+               FROM product_specification
+               WHERE product_code IS NOT NULL AND product_code < 1000
+               GROUP BY product_code
+               ORDER BY product_code"""
+        )
+    }
+
+
+@app.get("/quote_builder/sku/{code}")
+def get_quote_builder_sku(code: int, fy: str = Query(FY)):
+    """
+    Auto-filled SKU data for Quote Builder: product name, Wt/Mt, and the
+    live PMC-engine costing (Mfg Cost, Hist Purchase Rate, Hist Avg SP) from
+    the most recent month present in contribution_{fy}.
+    """
+    table = f"contribution_{fy}"
+    if not _table_exists(table):
+        return {"data": None, "warning": "No contribution data available for this FY yet."}
+
+    latest_month = query(
+        f"""SELECT month FROM {table} WHERE product_id = :code
+            ORDER BY id DESC LIMIT 1""",
+        {"code": code},
+    )
+    spec = query(
+        """SELECT product_code AS code, MIN(product_name) AS product_name,
+               AVG(width) AS width, AVG(length) AS length, AVG(weight) AS weight,
+               CASE WHEN AVG(weight) IS NULL OR AVG(weight) = 0 OR AVG(length) IS NULL OR AVG(length) = 0
+                    THEN 0 ELSE AVG(length) / AVG(weight) END AS mts_per_kg
+           FROM product_specification
+           WHERE product_code = :code
+           GROUP BY product_code""",
+        {"code": code},
+    )
+    if not spec:
+        return {"data": None, "warning": f"SKU code {code} not found in product_specification."}
+
+    row = spec[0]
+    cost = None
+    if latest_month:
+        month = latest_month[0]["month"]
+        cost_rows = query(
+            f"""SELECT month, mfg_cost_per_kg, selling_price_per_kg,
+                    purchase_value_used, purchase_qty_used
+                FROM {table} WHERE product_id = :code AND month = :month
+                LIMIT 1""",
+            {"code": code, "month": month},
+        )
+        if cost_rows:
+            c = cost_rows[0]
+            hist_purchase_rate = (
+                c["purchase_value_used"] / c["purchase_qty_used"]
+                if c["purchase_qty_used"] else 0
+            )
+            cost = {
+                "month": c["month"],
+                "mfg_cost_per_kg": c["mfg_cost_per_kg"],
+                "hist_avg_sp_per_kg": c["selling_price_per_kg"],
+                "hist_purchase_rate_per_kg": hist_purchase_rate,
+            }
+
+    return {
+        "data": {
+            "code": row["code"],
+            "product_name": row["product_name"],
+            "mts_per_kg": row["mts_per_kg"],
+            **(cost or {
+                "month": None,
+                "mfg_cost_per_kg": 0,
+                "hist_avg_sp_per_kg": 0,
+                "hist_purchase_rate_per_kg": 0,
+            }),
+        }
+    }
+
+
+@app.get("/quote_builder/stock/{code}")
+def get_quote_builder_stock(code: int):
+    """Bales in stock for a SKU, grouped by location (from current_stock snapshot)."""
+    if not _table_exists("current_stock"):
+        return {"data": [], "warning": "No stock snapshot ingested yet."}
+    return {
+        "data": query(
+            """SELECT location, SUM(bales) AS bales, MAX(as_of_date) AS as_of_date
+               FROM current_stock WHERE code = :code
+               GROUP BY location""",
+            {"code": code},
+        )
+    }
+
 
 # ─── Upload & Process ─────────────────────────────────────────────────────────
 

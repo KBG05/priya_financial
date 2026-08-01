@@ -1,6 +1,8 @@
 // Parse backend URL from env, fallback to localhost for dev
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
+
 async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
     const url = new URL(BASE + path);
     if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -19,6 +21,9 @@ export const api = {
     kpisAggregate: (months: string[], fy?: string) => get<{ data: Record<string, number | null> }>("/kpis/aggregate", { months: months.join(","), ...(fy ? { fy } : {}) }),
     directExpenses: (months: string[], fy?: string) => get<{ data: any[] }>("/direct_expenses", { months: months.join(","), ...(fy ? { fy } : {}) }),
     contribution: (months: string[], fy?: string) => get<{ data: any[] }>("/contribution", { months: months.join(","), ...(fy ? { fy } : {}) }),
+    quoteBuilderSkus: (fy?: string) => get<{ data: QuoteBuilderSkuOption[] }>("/quote_builder/skus", fy ? { fy } : undefined),
+    quoteBuilderSku: (code: number, fy?: string) => get<{ data: QuoteBuilderSku | null; warning?: string }>(`/quote_builder/sku/${code}`, fy ? { fy } : undefined),
+    quoteBuilderStock: (code: number) => get<{ data: QuoteBuilderStockRow[]; warning?: string }>(`/quote_builder/stock/${code}`),
     uploadAndProcess: async (params: {
         coreFile?: File | null;
         balanceFile?: File | null;
