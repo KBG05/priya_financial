@@ -8,11 +8,37 @@ Data sources:
     consumption_output_{fy}, mty_{fy}  for per-month cost scalars
 
 ────────────────────────────────────────────────────────────────────────
+PMC Rate Card (4.PMC_Jul 26_V3.xlsx, sheet "Rate Card")
+
+The three stages below reproduce V3's derived rates exactly:
+
+    STAGE 1  rm_cost_per_kg = rm_rate_base * YIELD          (V3 B24 = B4*B5)
+             wastage_per_kg = rm_cost_per_kg * WASTAGE      (V3 B25 = B24*B6)
+             stage1_rm      = rm_cost_per_kg + wastage_per_kg   (V3 B26)
+
+    STAGE 2  stage2_yarn    = yarn_conversion_per_kg        (V3 B27)
+
+    STAGE 3  fabric_addon_per_kg                            (V3 B28)
+             fabrication_per_kg = spec_fab_per_kg + FAB_RATE_INCREASE
+                                                            (V3 SKU Master col G)
+
+    mfg_cost_per_kg = 0  if the SKU has no Wt/Mt, else
+                      stage1_rm + stage2_yarn + fabrication_per_kg + fabric_addon
+                                                            (V3 SKU Master col H)
+
+Difference from V3 by design: V3 hardcodes FY-average scalars in the Rate Card
+(RM 151.17, in-house yarn 31.26, addon 14.47), whereas we derive Stage 1's RM
+rate, Stage 2 and Stage 3's add-on from each month's own ledger — per the
+ruling that the Rate Card should carry the month's actual values. So monthly
+totals will not equal V3's; the formula shape is identical.
+
+────────────────────────────────────────────────────────────────────────
 Per-month cost scalars (identical for all SKUs in the same month):
 
-    rm_price_per_kg      = SUM(value) / SUM(qty)
+    rm_rate_base         = SUM(value) / SUM(qty)
                            FROM consumption_output_{fy}
                            WHERE material = 'Raw Material Consumption'
+                           -- V3 B4, but monthly actual instead of FY average
 
     yarn_conversion_per_kg  = SUM(Wages-Yarn, Power Bill, R&M-Machinery, R&M-Electricals,
                                    Freight Inwards, Rent, Misc, Yarn Processing charges)
@@ -30,7 +56,9 @@ Per-month cost scalars (identical for all SKUs in the same month):
                             -- identical total to the old single-bucket calculation;
                             -- kept as a column for backwards compatibility
 
-    fabric_cost_per_kg   = rm_price_per_kg + filament_conv_per_kg
+    fabric_cost_per_kg   = stage1_rm + filament_conv_per_kg
+                            -- note: stage1_rm, not the raw RM rate, so this is
+                            -- the full per-kg burden excluding SKU-specific fab
 
 ────────────────────────────────────────────────────────────────────────
 Per-SKU marginal costing steps:
@@ -51,7 +79,7 @@ Per-SKU marginal costing steps:
         produced_qty = MAX(sales_qty - purchase_qty_used, 0)
 
     STEP 5  Costs
-        manufacturing_cost   = produced_qty * (rm_price + filament_conv + fabrication)
+        manufacturing_cost   = produced_qty * mfg_cost_per_kg
         purchase_value_used  = purchase_qty_used * purchase_rate_per_kg
 
     STEP 6  Contribution
@@ -59,8 +87,10 @@ Per-SKU marginal costing steps:
         contribution_per_kg  = contribution_value / sales_qty
 
 ────────────────────────────────────────────────────────────────────────
-Products with no match in product_specification are included with fab_per_kg = 0
-(manufacturing burden rm + fc still applied — no row is skipped).
+Products with no Wt/Mt (no product_specification row, or a blank weight/length)
+carry mfg_cost_per_kg = 0, matching V3's
+`=IF(OR(E="",E=0), 0, Stage1_RM+Stage2_Yarn+G+FabricAddon)`. As of the
+Ratio Masterv2 master no sold SKU falls into this case, so it is a safety net.
 
 Target table: contribution_{fy}
     id                   SERIAL PRIMARY KEY
@@ -70,12 +100,16 @@ Target table: contribution_{fy}
     qty                  REAL   -- original sales qty
     revenue              REAL   -- original sales revenue
     selling_price_per_kg REAL   -- revenue / qty (never adjusted)
-    rm_price             REAL   -- rm_price_per_kg for this month (PMC Stage1 RM)
+    rm_price             REAL   -- PMC Stage1 TOTAL: rm_rate_base * yield * (1 + wastage)
+    rm_rate_base         REAL   -- raw RM rate before yield/wastage (PMC B4)
+    wastage_per_kg       REAL   -- PMC B25
     yarn_conversion      REAL   -- yarn_conversion_per_kg for this month (PMC Stage2 Yarn)
     fabric_addon         REAL   -- fabric_addon_per_kg for this month (PMC Stage3 common add-on)
     filament_conversion  REAL   -- yarn_conversion + fabric_addon (kept for backwards compatibility)
-    fabric_cost          REAL   -- rm_price + filament_conversion
-    fabrication_per_kg   REAL   -- from product_specification
+    fabric_cost          REAL   -- rm_price (Stage1) + filament_conversion
+    fabrication_per_kg   REAL   -- spec fab/kg + fab_rate_increase (PMC SKU Master col G)
+    fab_rate_increase    REAL   -- flat PMC B14 uplift included in fabrication_per_kg
+    mfg_cost_per_kg      REAL   -- PMC SKU Master col H
     mts_per_kg           REAL   -- from product_specification
     contribution_per_kg  REAL
     sales_mtrs           REAL
@@ -90,6 +124,23 @@ Target table: contribution_{fy}
 from typing import Optional
 
 from .db import MONTHS, get_connection
+
+# ── PMC Rate Card constants (4.PMC_Jul 26_V3.xlsx, sheet "Rate Card") ────────
+# These are the inputs V3 hardcodes and we cannot derive from the ledger.
+# Everything else (RM rate, yarn conversion, fabric add-on, SKU fab rate) is
+# taken from the month's own data.
+#
+# YIELD    V3 B5  — kg of RM input per kg of fabric (99.63% historical yield).
+# WASTAGE  V3 B6  — uplift on RM cost. V3 ships 2%; its own note says
+#                   "Hist=0 (actual consumption), set 5% for forecasts". We
+#                   follow the file as shipped. Set to 0.0 to cost historical
+#                   months on actual consumption.
+# FAB_RATE_INCREASE
+#          V3 B14 — flat ₹/kg added to every SKU's fab rate. Same caveat:
+#                   the file ships ₹2 while its note says "Hist=0".
+YIELD_KG_RM_PER_KG_FABRIC = 1.0037
+WASTAGE_ALLOWANCE = 0.02
+FAB_RATE_INCREASE_PER_KG = 2.0
 
 
 def _table_exists(conn, table_name: str) -> bool:
@@ -128,6 +179,10 @@ def _create_table(conn, fy: str) -> None:
             filament_conversion  REAL,
             fabric_cost          REAL,
             fabrication_per_kg   REAL,
+            rm_rate_base         REAL,
+            wastage_per_kg       REAL,
+            fab_rate_increase    REAL,
+            mfg_cost_per_kg      REAL,
             mts_per_kg           REAL,
             contribution_per_kg  REAL,
             sales_mtrs           REAL,
@@ -149,6 +204,10 @@ def _migrate_table(conn, fy: str) -> None:
         ("manufacturing_cost", "REAL"),
         ("yarn_conversion",   "REAL"),
         ("fabric_addon",      "REAL"),
+        ("rm_rate_base",      "REAL"),
+        ("wastage_per_kg",    "REAL"),
+        ("fab_rate_increase", "REAL"),
+        ("mfg_cost_per_kg",   "REAL"),
     ]
     for col, dtype in debug_cols:
         try:
@@ -288,11 +347,17 @@ def calculate_contribution(
         # Delete existing rows for this month before recalculating
         conn.execute(f"DELETE FROM contribution_{fy} WHERE month = %s", (month,))
 
-        rm = _rm_price(conn, fy, month)
+        # ── PMC Rate Card, Stage 1 (V3 B24/B25/B26) ─────────────────────────
+        rm_rate_base = _rm_price(conn, fy, month)
+        rm_cost_per_kg = rm_rate_base * YIELD_KG_RM_PER_KG_FABRIC
+        wastage_per_kg = rm_cost_per_kg * WASTAGE_ALLOWANCE
+        rm = rm_cost_per_kg + wastage_per_kg          # Stage 1 total
+
+        # Stage 2 (V3 B27) and Stage 3 common add-on (V3 B28), monthly actual
         yarn_conv = _yarn_conversion(conn, fy, month)
         fab_addon = _fabric_addon(conn, fy, month)
         fc = yarn_conv + fab_addon
-        fabric_cost_per_kg = rm + fc   # user definition: rm + filament_conv
+        fabric_cost_per_kg = rm + fc
 
         # Sanity check: yarn_conv + fab_addon must equal the total this replaces
         # (all Variable & Direct Expense except Fabrication charges).
@@ -314,7 +379,8 @@ def calculate_contribution(
             print(f"  ⚠  [{month}] Stage2+Stage3 split ({fc:.4f}) does not match "
                   f"lump-sum total ({old_fc:.4f}) — check particulars naming")
 
-        print(f"  [{month}] RM_PRICE={rm:.4f}  YARN_CONV={yarn_conv:.4f}  "
+        print(f"  [{month}] RM_BASE={rm_rate_base:.4f}  WASTAGE={wastage_per_kg:.4f}  "
+              f"STAGE1_RM={rm:.4f}  YARN_CONV={yarn_conv:.4f}  "
               f"FABRIC_ADDON={fab_addon:.4f}  FILAMENT_CONV={fc:.4f}  FABRIC_COST={fabric_cost_per_kg:.4f}")
 
         # LEFT JOIN item_purchases if the table exists (optional purchase register)
@@ -322,12 +388,18 @@ def calculate_contribution(
         if has_purchases:
             purchase_join = f"LEFT JOIN item_purchases_{fy} ip ON ip.product_id = s.product_id AND ip.month = s.month"
             purchase_cols = "COALESCE(ip.qty, 0) AS purchase_qty, COALESCE(ip.purchase_rate_per_kg, 0) AS purchase_rate"
-            # Exclude products in neither spec nor purchases (e.g. HDPE/Yarn/Waste RM re-sales)
-            scope_filter = "AND (p.product_code IS NOT NULL OR ip.product_id IS NOT NULL)"
         else:
             purchase_join = ""
             purchase_cols = "0 AS purchase_qty, 0 AS purchase_rate"
-            scope_filter = "AND p.product_code IS NOT NULL"
+
+        # SKU scope, matching PMC's SKU Master / Live Contribution exactly:
+        # fabric SKUs are coded 101-999; codes >= 1000 are yarn (3xxx), master
+        # batch (2xxx), waste (2313) and generic trading lines (1xxx), which PMC
+        # keeps out of per-SKU contribution and handles as PAL adjustments.
+        # A SKU with sales but no product_specification row is still included
+        # (fabrication_per_kg falls back to 0), as PMC does for codes whose
+        # Rate/Mt is blank.
+        scope_filter = "AND s.product_id < 1000"
 
         # JOIN item_sales with product_specification averaged by product_code.
         sql = f"""
@@ -390,11 +462,24 @@ def calculate_contribution(
             purchase_qty  = float(purchase_qty or 0)
             purchase_rate = float(purchase_rate or 0)
 
+            # ── PMC SKU Master col G: Fab Rate ₹/Kg (derived) ───────────
+            # V3 applies the flat increase only where the SKU has a non-zero
+            # base fab rate: every one of its Rate/Mt = 0 rows carries G = 0,
+            # not G = 2 (codes 596, 635, 706, 720). Matching that keeps us
+            # identical to V3 on all 127 of its SKU rows.
+            fab_rate_increase = FAB_RATE_INCREASE_PER_KG if fab_per_kg else 0.0
+            fab_per_kg += fab_rate_increase
+
+            # ── PMC SKU Master col H: Mfg Cost ₹/Kg (derived) ───────────
+            # mts_per_kg == 0 means the SKU has no usable Wt/Mt, which V3
+            # costs at zero rather than applying the common burden.
+            mfg_cost_per_kg = (rm + fc + fab_per_kg) if mts_per_kg else 0.0
+
             # ── Marginal costing steps ──────────────────────────────────
             purchase_qty_used   = min(purchase_qty, qty)          # Step 3
             produced_qty        = max(qty - purchase_qty_used, 0.0)  # Step 4
 
-            manufacturing_cost  = produced_qty * (rm + fc + fab_per_kg)  # Step 5a
+            manufacturing_cost  = produced_qty * mfg_cost_per_kg   # Step 5a
             purchase_value_used = purchase_qty_used * purchase_rate       # Step 5b
 
             contrib_value  = rev - manufacturing_cost - purchase_value_used  # Step 6
@@ -404,13 +489,16 @@ def calculate_contribution(
             conn.execute(
                 f"""INSERT INTO contribution_{fy}
                     (product_id, product_name, month, qty, revenue, selling_price_per_kg,
-                     rm_price, yarn_conversion, fabric_addon, filament_conversion, fabric_cost,
-                     fabrication_per_kg, mts_per_kg,
+                     rm_price, rm_rate_base, wastage_per_kg,
+                     yarn_conversion, fabric_addon, filament_conversion, fabric_cost,
+                     fabrication_per_kg, fab_rate_increase, mfg_cost_per_kg, mts_per_kg,
                      contribution_per_kg, sales_mtrs, contribution_value,
                      produced_qty, purchase_qty_used, purchase_value_used, manufacturing_cost)
-                VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s,%s,%s)""",
+                VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s, %s,%s,%s,%s)""",
                 (pid, pname, month, qty, rev, sell_rate,
-                 rm, yarn_conv, fab_addon, fc, fabric_cost_per_kg, fab_per_kg, mts_per_kg,
+                 rm, rm_rate_base, wastage_per_kg,
+                 yarn_conv, fab_addon, fc, fabric_cost_per_kg,
+                 fab_per_kg, fab_rate_increase, mfg_cost_per_kg, mts_per_kg,
                  contrib_per_kg, sales_mtrs, contrib_value,
                  produced_qty, purchase_qty_used, purchase_value_used, manufacturing_cost),
             )

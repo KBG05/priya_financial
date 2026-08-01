@@ -140,7 +140,10 @@ def ingest_item_sales(conn, fy: str, month: str, filepath: Optional[str | Path] 
     filepath : Optional path to an Excel file with a "Sales" sheet
     """
     _create_table(conn, fy)
-    conn.execute(f"DELETE FROM item_sales_{fy} WHERE month = %s", (month,))
+
+    # NOTE: existing rows are deleted only once a source has actually yielded
+    # data. Deleting up front means any early return below (no file, no
+    # TimeID mapping, unreadable sheet) silently wipes the month.
 
     # ── Try Excel "Sales" sheet first ─────────────────────────────────────
     if filepath is not None:
@@ -148,6 +151,7 @@ def ingest_item_sales(conn, fy: str, month: str, filepath: Optional[str | Path] 
         if product_data is not None:
             print(f"  [{month}] Reading item sales from Excel 'Sales' sheet "
                   f"({Path(filepath).name})")
+            conn.execute(f"DELETE FROM item_sales_{fy} WHERE month = %s", (month,))
             inserted = 0
             for pid, (qty, rev) in product_data.items():
                 rate = rev / qty if qty else 0.0
@@ -194,6 +198,12 @@ def ingest_item_sales(conn, fy: str, month: str, filepath: Optional[str | Path] 
         pt_conn.close()
 
     print(f"  [{month}] Loaded {len(rows)} products from priya_textile TimeID={time_id}")
+
+    if not rows:
+        print(f"  [{month}] priya_textile returned no rows — existing item_sales left untouched")
+        return
+
+    conn.execute(f"DELETE FROM item_sales_{fy} WHERE month = %s", (month,))
 
     # Filter to manufactured products only
     allowed_cur = conn.execute(

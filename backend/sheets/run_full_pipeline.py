@@ -236,6 +236,23 @@ def _get_insert_columns(conn, table_name: str) -> list[str]:
     return [c for c in col_names if c != "id"]
 
 
+def _count_rows_in_months(conn, table_name: str, selected_months: list[str]) -> int:
+    """How many rows the table already holds for the selected months (0 if absent)."""
+    if not _table_exists(conn, table_name):
+        return 0
+
+    cols = _get_insert_columns(conn, table_name)
+    if not cols or "month" not in cols:
+        return 0
+
+    placeholders = ",".join(["%s"] * len(selected_months))
+    rows = conn.execute(
+        f"SELECT COUNT(*) FROM {table_name} WHERE month IN ({placeholders})",
+        tuple(selected_months),
+    ).fetchall()
+    return int(rows[0][0]) if rows else 0
+
+
 def _backup_rows_outside_months(conn, table_name: str, selected_months: list[str]):
     """Backup rows whose month is not in selected_months."""
     if not _table_exists(conn, table_name):
