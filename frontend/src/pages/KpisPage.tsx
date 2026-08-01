@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GroupedKpiTable, type KpiGroup } from "@/components/GroupedKpiTable";
+import { KpiCardGrid } from "@/components/KpiCardGrid";
 import { TrendChart } from "@/components/TrendChart";
 import { StatStrip } from "@/components/StatStrip";
 import { api } from "@/api";
@@ -86,14 +87,22 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
                 pct={trendOption !== "EPS" && trendOption !== "EV (Enterprise Value)" && trendOption !== "PE Ratio" && !trendOption.includes("Days")}
             />
 
-            {/* Grouped collapsible KPI table */}
-            <GroupedKpiTable
-                groups={KPI_GROUPS}
-                allData={allData}
-                months={months}
-                viewMode={viewMode}
-                curMonth={cur}
-            />
+            {viewMode === "single" ? (
+                <KpiCardGrid
+                    groups={KPI_GROUPS.map(g => ({
+                        title: g.label,
+                        items: g.items.map(name => ({ label: name, value: kv(name, cur), prevValue: kv(name, prev) })),
+                    }))}
+                />
+            ) : (
+                <GroupedKpiTable
+                    groups={KPI_GROUPS}
+                    allData={allData}
+                    months={months}
+                    viewMode={viewMode}
+                    curMonth={cur}
+                />
+            )}
         </div>
     );
 }

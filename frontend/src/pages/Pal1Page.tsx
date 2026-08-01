@@ -135,6 +135,7 @@ export function Pal1Page({ months, viewMode, prevMonths, fy }: Props) {
                     groups={SECTIONS.map(sec => ({
                         title: sec.title,
                         rows: sec.items.map(item => ({ label: item, value: g(item) })),
+                        sortRows: sec.title !== "Purchases & Stock" && sec.title !== "Profits",
                     }))}
                 />
             ) : (

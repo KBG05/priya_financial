@@ -149,6 +149,7 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
                         return {
                             title: mat,
                             rows: COMPS.map(c => ({ label: c.label, value: row?.[c.vk] ?? null })),
+                            sortRows: false,
                         };
                     })}
                 />

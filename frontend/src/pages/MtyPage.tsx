@@ -156,6 +156,7 @@ export function MtyPage({ months, viewMode, prevMonths, fy }: Props) {
                     groups={SECTIONS.map(sec => ({
                         title: sec.title,
                         rows: sec.items.map((item: string) => ({ label: item, value: g(item) })),
+                        sortRows: !["PAL I Breakdown", "Material & Stock", "Profitability"].includes(sec.title),
                     }))}
                 />
             ) : (

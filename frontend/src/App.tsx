@@ -9,6 +9,7 @@ import { KpisPage } from "@/pages/KpisPage";
 import { DirectExpensesPage } from "@/pages/DirectExpensesPage";
 import { ContributionPage } from "@/pages/ContributionPage";
 import { api } from "@/api";
+import { periodLabel } from "@/lib/periodLabel";
 import type { ViewMode } from "@/types";
 import {
   BarChart3, TrendingUp, Package, Target, Receipt, DollarSign
@@ -156,6 +157,11 @@ function Dashboard() {
         </header>
 
         <main className="px-5 py-5 flex flex-col gap-4 overflow-x-hidden min-w-0">
+          {/* Period headline — which slice of the year is currently in view */}
+          <p className="font-display text-sm font-semibold tracking-tight text-primary -mb-1">
+            {periodLabel(fy, viewMode, months)}
+          </p>
+
           {/* Filters */}
           <FilterBar
             availableMonths={availableMonths}

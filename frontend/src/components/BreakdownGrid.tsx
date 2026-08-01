@@ -10,6 +10,10 @@ export interface BreakdownRow {
 export interface BreakdownGroup {
     title: string;
     rows: BreakdownRow[];
+    /** Sort rows biggest-to-smallest by magnitude, with total-like rows pinned last.
+     *  Defaults to true — set false for groups whose sequence itself carries meaning
+     *  (a stock-flow: opening → purchases → closing, or a P&L waterfall). */
+    sortRows?: boolean;
 }
 
 interface Props {
@@ -24,11 +28,20 @@ function isTotalLabel(label: string) {
     return l.startsWith("total") || l === "nett profit" || l.startsWith("grand") || l.endsWith("->");
 }
 
+function orderRows(rows: BreakdownRow[], sortRows?: boolean): BreakdownRow[] {
+    if (sortRows === false) return rows;
+    const items = rows.filter(r => !isTotalLabel(r.label));
+    const totals = rows.filter(r => isTotalLabel(r.label));
+    items.sort((a, b) => Math.abs(b.value ?? 0) - Math.abs(a.value ?? 0));
+    return [...items, ...totals];
+}
+
 /** One category's line items rendered as a compact bar-list — the single-month
  *  alternative to a wide, mostly-empty two-column ledger table. */
-function BreakdownCard({ title, rows, rupee, pct }: BreakdownGroup & { rupee?: boolean; pct?: boolean }) {
+function BreakdownCard({ title, rows, rupee, pct, sortRows }: BreakdownGroup & { rupee?: boolean; pct?: boolean }) {
     const Icon = sectionIcon(title);
     const label = stripLeadingEmoji(title);
+    const orderedRows = orderRows(rows, sortRows);
     const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.value ?? 0)));
 
     return (
@@ -38,7 +51,7 @@ function BreakdownCard({ title, rows, rupee, pct }: BreakdownGroup & { rupee?: b
                 <span className="font-display font-semibold text-[13px] tracking-tight">{label}</span>
             </div>
             <div className="flex flex-col px-4 py-1.5">
-                {rows.map((r, i) => {
+                {orderedRows.map((r, i) => {
                     const isTotal = isTotalLabel(r.label);
                     const isNeg = (r.value ?? 0) < 0;
                     const pctWidth = r.value == null ? 0 : Math.max(3, (Math.abs(r.value) / maxAbs) * 100);
@@ -84,7 +97,7 @@ export function BreakdownGrid({ groups, rupee, pct, className }: Props) {
     return (
         <div className={cn("grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3", className)}>
             {groups.map(g => (
-                <BreakdownCard key={g.title} title={g.title} rows={g.rows} rupee={rupee} pct={pct} />
+                <BreakdownCard key={g.title} title={g.title} rows={g.rows} sortRows={g.sortRows} rupee={rupee} pct={pct} />
             ))}
         </div>
     );
