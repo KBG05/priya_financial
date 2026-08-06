@@ -21,7 +21,7 @@ export const api = {
     kpisAggregate: (months: string[], fy?: string) => get<{ data: Record<string, number | null> }>("/kpis/aggregate", { months: months.join(","), ...(fy ? { fy } : {}) }),
     directExpenses: (months: string[], fy?: string) => get<{ data: any[] }>("/direct_expenses", { months: months.join(","), ...(fy ? { fy } : {}) }),
     contribution: (months: string[], fy?: string) => get<{ data: any[] }>("/contribution", { months: months.join(","), ...(fy ? { fy } : {}) }),
-    quoteBuilderSkus: (fy?: string) => get<{ data: QuoteBuilderSkuOption[] }>("/quote_builder/skus", fy ? { fy } : undefined),
+    quoteBuilderSkus: (fy?: string, inStockOnly?: boolean) => get<{ data: QuoteBuilderSkuOption[] }>("/quote_builder/skus", { ...(fy ? { fy } : {}), ...(inStockOnly ? { in_stock_only: "true" } : {}) }),
     quoteBuilderSku: (code: number, fy?: string) => get<{ data: QuoteBuilderSku | null; warning?: string }>(`/quote_builder/sku/${code}`, fy ? { fy } : undefined),
     quoteBuilderStock: (code: number) => get<{ data: QuoteBuilderStockRow[]; warning?: string }>(`/quote_builder/stock/${code}`),
     uploadAndProcess: async (params: {

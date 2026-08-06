@@ -67,6 +67,7 @@ export interface QuoteBuilderSku {
     mfg_cost_per_kg: number;
     hist_avg_sp_per_kg: number;
     hist_purchase_rate_per_kg: number;
+    has_cost_data: boolean;
 }
 
 export interface QuoteBuilderStockRow {
