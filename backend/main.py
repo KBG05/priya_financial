@@ -74,6 +74,14 @@ def _table_exists(table_name: str) -> bool:
     return bool(row)
 
 
+def _column_exists(table_name: str, column_name: str) -> bool:
+    row = query(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=:t AND column_name=:c",
+        {"t": table_name, "c": column_name},
+    )
+    return bool(row)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "fy": FY}
@@ -219,17 +227,25 @@ def get_contribution(months: str = Query(...), fy: str = Query(FY)):
 # ─── Quote Builder ─────────────────────────────────────────────────────────
 
 @app.get("/quote_builder/skus")
-def get_quote_builder_skus(fy: str = Query(FY)):
+def get_quote_builder_skus(fy: str = Query(FY), in_stock_only: bool = Query(False)):
     """SKU code + name list for the Quote Builder's searchable dropdown."""
-    return {
-        "data": query(
-            """SELECT product_code AS code, MIN(product_name) AS product_name
-               FROM product_specification
-               WHERE product_code IS NOT NULL AND product_code < 1000
-               GROUP BY product_code
-               ORDER BY product_code"""
-        )
-    }
+    if in_stock_only and _table_exists("current_stock"):
+        sql = """SELECT ps.product_code AS code, MIN(ps.product_name) AS product_name
+                  FROM product_specification ps
+                  WHERE ps.product_code IS NOT NULL AND ps.product_code < 1000
+                    AND EXISTS (
+                        SELECT 1 FROM current_stock cs
+                        WHERE cs.code = ps.product_code AND COALESCE(cs.bales, 0) > 0
+                    )
+                  GROUP BY ps.product_code
+                  ORDER BY ps.product_code"""
+    else:
+        sql = """SELECT product_code AS code, MIN(product_name) AS product_name
+                  FROM product_specification
+                  WHERE product_code IS NOT NULL AND product_code < 1000
+                  GROUP BY product_code
+                  ORDER BY product_code"""
+    return {"data": query(sql)}
 
 
 @app.get("/quote_builder/sku/{code}")
@@ -243,11 +259,13 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
     if not _table_exists(table):
         return {"data": None, "warning": "No contribution data available for this FY yet."}
 
-    latest_month = query(
-        f"""SELECT month FROM {table} WHERE product_id = :code
-            ORDER BY id DESC LIMIT 1""",
+    month_rows = query(
+        f"""SELECT DISTINCT month FROM {table} WHERE product_id = :code""",
         {"code": code},
     )
+    available_months = [r["month"] for r in month_rows]
+    latest = max(available_months, key=lambda m: MONTH_ORDER.index(m) if m in MONTH_ORDER else -1) if available_months else None
+    latest_month = [{"month": latest}] if latest else []
     spec = query(
         """SELECT product_code AS code, MIN(product_name) AS product_name,
                AVG(width) AS width, AVG(length) AS length, AVG(weight) AS weight,
@@ -263,10 +281,12 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
 
     row = spec[0]
     cost = None
+    has_direct_mfg_col = _column_exists(table, "mfg_cost_per_kg")
     if latest_month:
         month = latest_month[0]["month"]
+        mfg_cost_select = "mfg_cost_per_kg" if has_direct_mfg_col else "manufacturing_cost, produced_qty"
         cost_rows = query(
-            f"""SELECT month, mfg_cost_per_kg, selling_price_per_kg,
+            f"""SELECT month, {mfg_cost_select}, selling_price_per_kg,
                     purchase_value_used, purchase_qty_used
                 FROM {table} WHERE product_id = :code AND month = :month
                 LIMIT 1""",
@@ -274,6 +294,8 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
         )
         if cost_rows:
             c = cost_rows[0]
+            if not has_direct_mfg_col:
+                c["mfg_cost_per_kg"] = (c["manufacturing_cost"] / c["produced_qty"]) if c.get("produced_qty") else 0
             hist_purchase_rate = (
                 c["purchase_value_used"] / c["purchase_qty_used"]
                 if c["purchase_qty_used"] else 0
@@ -285,18 +307,22 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
                 "hist_purchase_rate_per_kg": hist_purchase_rate,
             }
 
+    warning = None if cost else f"No costing history for this SKU in FY {fy} — this SKU may not have been produced/sold this year."
+
     return {
         "data": {
             "code": row["code"],
             "product_name": row["product_name"],
             "mts_per_kg": row["mts_per_kg"],
+            "has_cost_data": bool(cost),
             **(cost or {
                 "month": None,
                 "mfg_cost_per_kg": 0,
                 "hist_avg_sp_per_kg": 0,
                 "hist_purchase_rate_per_kg": 0,
             }),
-        }
+        },
+        "warning": warning,
     }
 
 
