@@ -53,3 +53,26 @@ export interface DirectExpRow {
 export const KPI_PCT = new Set(["Revenue growth", "Gross margin", "EBITDA", "Net Margin"]);
 // KPIs that show ₹ symbol
 export const KPI_RUPEE = new Set(["EV (Enterprise Value)"]);
+
+export interface QuoteBuilderSkuOption {
+    code: number;
+    product_name: string;
+}
+
+export interface QuoteBuilderSku {
+    code: number;
+    product_name: string;
+    mts_per_kg: number | null;
+    month: string | null;
+    mfg_cost_per_kg: number;
+    hist_avg_sp_per_kg: number;
+    hist_purchase_rate_per_kg: number;
+    has_cost_data: boolean;
+}
+
+export interface QuoteBuilderStockRow {
+    location: string;
+    bales: number;
+    qty_kgs: number;
+    as_of_date: string;
+}

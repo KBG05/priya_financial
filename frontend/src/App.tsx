@@ -8,21 +8,23 @@ import { ConsumptionPage } from "@/pages/ConsumptionPage";
 import { KpisPage } from "@/pages/KpisPage";
 import { DirectExpensesPage } from "@/pages/DirectExpensesPage";
 import { ContributionPage } from "@/pages/ContributionPage";
+import { QuoteBuilderPage } from "@/pages/QuoteBuilderPage";
 import { api } from "@/api";
 import { periodLabel } from "@/lib/periodLabel";
 import type { ViewMode } from "@/types";
 import {
-  BarChart3, TrendingUp, Package, Target, Receipt, DollarSign
+  BarChart3, TrendingUp, Package, Target, Receipt, DollarSign, Calculator
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses" | "contribution";
+export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses" | "contribution" | "quote_builder";
 
 const NAV_ITEMS: { id: TabId; label: string; blurb: string; icon: React.ElementType }[] = [
   { id: "pal1",             label: "PAL-1",           blurb: "Profit & loss statement",        icon: BarChart3 },
   { id: "mty",              label: "MTY",              blurb: "Month-to-year financial rollup", icon: TrendingUp },
   { id: "consumption",      label: "Consumption",      blurb: "Raw material movement & stock",  icon: Package },
   { id: "contribution",     label: "Contribution",     blurb: "Per-product margin analysis",    icon: DollarSign },
+  { id: "quote_builder",    label: "Quote Builder",    blurb: "Price a single deal",             icon: Calculator },
   { id: "direct_expenses",  label: "Direct Expenses",  blurb: "Cost centre breakdown",           icon: Receipt },
   { id: "kpis",             label: "KPI Scorecard",    blurb: "Ratios & performance signals",    icon: Target },
 ];
@@ -182,6 +184,7 @@ function Dashboard() {
             {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
             {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
             {activeTab === "contribution"    && <ContributionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
+            {activeTab === "quote_builder"   && <QuoteBuilderPage fy={fy} />}
           </div>
         </main>
       </div>
