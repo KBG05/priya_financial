@@ -1,0 +1,422 @@
+import { useEffect, useMemo, useState } from "react";
+import { Search, X, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/api";
+import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
+
+interface Props { fy?: string; }
+
+type Sourcing = "Produce in-house" | "Purchase & resell";
+
+type Verdict = "REJECT" | "CAUTION" | "ACCEPTABLE" | "STRONG";
+
+const VERDICT_STYLE: Record<Verdict, string> = {
+    REJECT: "bg-destructive/15 text-destructive border-destructive/40",
+    CAUTION: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40",
+    ACCEPTABLE: "bg-primary/10 text-primary border-primary/30",
+    STRONG: "bg-primary/20 text-primary border-primary/50",
+};
+
+const VERDICT_LABEL: Record<Verdict, string> = {
+    REJECT: "REJECT — loss per kg",
+    CAUTION: "CAUTION — thin margin",
+    ACCEPTABLE: "ACCEPTABLE",
+    STRONG: "STRONG",
+};
+
+/** Round up to the nearest `step` (mirrors Excel CEILING.MATH). */
+function ceilingToStep(value: number, step: number): number {
+    if (!step) return value;
+    return Math.ceil(value / step) * step;
+}
+
+/** Number formatter for Quote Builder fields — 0 is a legitimate value here, not "missing". */
+function num(v: number): string {
+    if (v == null || isNaN(v)) return "—";
+    return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function QuoteBuilderPage({ fy }: Props) {
+    const [skuOptions, setSkuOptions] = useState<QuoteBuilderSkuOption[]>([]);
+    const [skuSearch, setSkuSearch] = useState("");
+    const [skuOpen, setSkuOpen] = useState(false);
+    const [selectedCode, setSelectedCode] = useState<number | null>(null);
+    const [inStockOnly, setInStockOnly] = useState(true);
+
+    const [sku, setSku] = useState<QuoteBuilderSku | null>(null);
+    const [stock, setStock] = useState<QuoteBuilderStockRow[]>([]);
+    const [skuLoading, setSkuLoading] = useState(false);
+    const [skuWarning, setSkuWarning] = useState<string | null>(null);
+
+    const [sourcing, setSourcing] = useState<Sourcing>("Produce in-house");
+    const [ratePerMt, setRatePerMt] = useState<string>("");
+    const [proposedQty, setProposedQty] = useState<string>("1");
+    const [purchaseRate, setPurchaseRate] = useState<string>("");
+    const [vcOverride, setVcOverride] = useState<string | null>(null);
+
+    useEffect(() => {
+        api.quoteBuilderSkus(fy, inStockOnly).then(r => setSkuOptions(r.data)).catch(() => setSkuOptions([]));
+    }, [fy, inStockOnly]);
+
+    useEffect(() => {
+        if (selectedCode == null) { setSku(null); setStock([]); return; }
+        setSkuLoading(true);
+        setSkuWarning(null);
+        setVcOverride(null);
+        Promise.all([
+            api.quoteBuilderSku(selectedCode, fy),
+            api.quoteBuilderStock(selectedCode),
+        ]).then(([skuRes, stockRes]) => {
+            setSku(skuRes.data);
+            setSkuWarning(skuRes.warning ?? null);
+            setStock(stockRes.data);
+            setPurchaseRate(skuRes.data ? String(skuRes.data.hist_purchase_rate_per_kg ?? 0) : "");
+            setSkuLoading(false);
+        }).catch(() => setSkuLoading(false));
+    }, [selectedCode, fy]);
+
+    const filteredSkus = useMemo(() => {
+        const q = skuSearch.trim().toLowerCase();
+        if (!q) return skuOptions.slice(0, 50);
+        return skuOptions.filter(
+            o => o.product_name.toLowerCase().includes(q) || String(o.code).includes(q)
+        ).slice(0, 50);
+    }, [skuOptions, skuSearch]);
+
+    const wtPerMt = sku?.mts_per_kg && sku.mts_per_kg > 0 ? 1 / sku.mts_per_kg : 0; // Wt/Mt = kg per metre
+    const wtPerRoll = wtPerMt > 0 ? wtPerMt * (selectedCode != null && selectedCode < 300 ? 50 : 30) : 0;
+
+    const rate = parseFloat(ratePerMt) || 0;
+    const qty = parseFloat(proposedQty) || 0;
+    const purchRate = parseFloat(purchaseRate) || 0;
+
+    const proposedSalePrice = wtPerMt > 0 ? ceilingToStep(rate / wtPerMt, 0.5) : 0;
+    const ratePerKgHint = wtPerMt > 0 && rate > 0 ? rate / wtPerMt : 0;
+
+    const stockTotalKg = stock.reduce((s, r) => s + (r.qty_kgs ?? 0), 0);
+    const stockTotalBales = stock.reduce((s, r) => s + (r.bales ?? 0), 0);
+    const stockShortfallKg = qty > 0 ? qty - stockTotalKg : 0;
+    const stockCovers = qty > 0 && stockTotalKg >= qty;
+
+    const hasCostData = sku?.has_cost_data ?? false;
+    const liveVariableCost = sourcing === "Produce in-house"
+        ? (sku?.mfg_cost_per_kg ?? 0)
+        : purchRate;
+    const variableCost = vcOverride !== null ? (parseFloat(vcOverride) || 0) : liveVariableCost;
+    const variableCostIsKnown = vcOverride !== null || sourcing === "Purchase & resell" || hasCostData;
+
+    const contributionPerKg = proposedSalePrice - variableCost;
+    const pvRatio = proposedSalePrice > 0 ? contributionPerKg / proposedSalePrice : 0;
+    const totalContribution = contributionPerKg * qty;
+    const floorSp = variableCost;
+    const spFor15 = variableCost > 0 ? variableCost / 0.85 : 0;
+
+    const verdict: Verdict = contributionPerKg < 0
+        ? "REJECT"
+        : pvRatio < 0.10
+        ? "CAUTION"
+        : pvRatio < 0.20
+        ? "ACCEPTABLE"
+        : "STRONG";
+
+    const canQuote = proposedSalePrice > 0 && variableCostIsKnown;
+    const selectedOption = skuOptions.find(o => o.code === selectedCode);
+
+    function resetDeal() {
+        setRatePerMt("");
+        setProposedQty("1");
+        setVcOverride(null);
+        setSourcing("Produce in-house");
+        if (sku) setPurchaseRate(String(sku.hist_purchase_rate_per_kg ?? 0));
+    }
+
+    return (
+        <div className="flex flex-col gap-4 min-w-0 w-full">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-base font-semibold text-foreground">Quote Builder</h2>
+                    <p className="text-sm text-muted-foreground">Price a single deal against live PMC costing.</p>
+                </div>
+                {sku && (
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={resetDeal}>
+                        <RotateCcw size={13} /> Reset deal terms
+                    </Button>
+                )}
+            </div>
+
+            {/* ── SKU picker ── */}
+            <Card className="card-elevated">
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="relative w-full sm:max-w-lg">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <Input
+                            value={skuOpen ? skuSearch : (selectedOption ? `${selectedOption.code} — ${selectedOption.product_name}` : skuSearch)}
+                            onChange={e => { setSkuSearch(e.target.value); setSkuOpen(true); }}
+                            onFocus={() => { setSkuOpen(true); setSkuSearch(""); }}
+                            placeholder="Search SKU code or product name…"
+                            className="h-10 pl-9 pr-8 text-sm"
+                        />
+                        {selectedOption && !skuOpen && (
+                            <button
+                                onClick={() => { setSelectedCode(null); setSkuSearch(""); }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                        {skuOpen && (
+                            <div className="absolute z-40 mt-1 w-full max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
+                                {filteredSkus.length === 0 ? (
+                                    <div className="px-3 py-3 text-sm text-muted-foreground">
+                                        No matching SKUs{inStockOnly ? " with stock on hand." : "."}
+                                    </div>
+                                ) : filteredSkus.map(o => (
+                                    <button
+                                        key={o.code}
+                                        onClick={() => { setSelectedCode(o.code); setSkuOpen(false); setSkuSearch(""); }}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center gap-3"
+                                    >
+                                        <span className="text-muted-foreground w-10 shrink-0 tabular-nums text-xs">{o.code}</span>
+                                        <span className="text-foreground">{o.product_name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {skuOpen && (
+                            <div className="fixed inset-0 z-30" onClick={() => setSkuOpen(false)} />
+                        )}
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground select-none cursor-pointer shrink-0">
+                        <input
+                            type="checkbox"
+                            checked={inStockOnly}
+                            onChange={e => setInStockOnly(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-border accent-primary"
+                        />
+                        Only show SKUs with stock on hand
+                    </label>
+                </CardContent>
+            </Card>
+
+            {selectedCode == null && (
+                <p className="text-sm text-muted-foreground px-1">Pick a SKU above to start pricing a deal.</p>
+            )}
+
+            {skuLoading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Skeleton className="h-56" />
+                    <Skeleton className="h-56" />
+                </div>
+            )}
+
+            {!skuLoading && sku && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* ── Auto-filled SKU info ── */}
+                    <Card className="card-elevated">
+                        <CardHeader className="py-3 px-4">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                SKU — {sku.code}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
+                            <div className="font-semibold text-base text-foreground">{sku.product_name}</div>
+                            {skuWarning && (
+                                <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-2 py-1.5">
+                                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                                    {skuWarning}
+                                </p>
+                            )}
+                            <Row label="Mfg Cost ₹/Kg (live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} />
+                            <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
+                            <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
+                            <Row
+                                label="Wt/Mt"
+                                value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
+                            />
+                            {sku.month && (
+                                <span className="text-[11px] text-muted-foreground">Costing basis: {sku.month} (latest available)</span>
+                            )}
+                            <div className="mt-2 pt-3 border-t border-border/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
+                                    {stock.length > 0 && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                            as of {stock[0].as_of_date}
+                                        </span>
+                                    )}
+                                </div>
+                                {stock.length === 0 ? (
+                                    <span className="text-muted-foreground text-xs">No stock snapshot for this SKU — zero on hand at last count.</span>
+                                ) : (
+                                    <div className="rounded-md border border-border/50 overflow-hidden">
+                                        <table className="w-full text-xs">
+                                            <thead>
+                                                <tr className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                    <th className="text-left font-semibold px-2.5 py-1.5">Unit</th>
+                                                    <th className="text-right font-semibold px-2.5 py-1.5">Bales</th>
+                                                    <th className="text-right font-semibold px-2.5 py-1.5">Kg</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {stock.map(s => (
+                                                    <tr key={s.location} className="border-t border-border/30">
+                                                        <td className="px-2.5 py-1.5 text-foreground">{s.location}</td>
+                                                        <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.bales)}</td>
+                                                        <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.qty_kgs)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="border-t border-border/60 bg-muted/30">
+                                                    <td className="px-2.5 py-1.5 font-semibold text-foreground">Total</td>
+                                                    <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalBales)}</td>
+                                                    <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalKg)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* ── Deal terms ── */}
+                    <Card className="card-elevated">
+                        <CardHeader className="py-3 px-4">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Deal Terms
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 flex flex-col gap-3.5 text-sm">
+                            <Field label="Sourcing">
+                                <Select value={sourcing} onValueChange={v => setSourcing(v as Sourcing)}>
+                                    <SelectTrigger size="sm" className="w-full h-9 text-sm">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Produce in-house">Produce in-house</SelectItem>
+                                        <SelectItem value="Purchase & resell">Purchase & resell</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                            <Field label="Rate per Mt (₹/Metre)">
+                                <Input type="number" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
+                                {ratePerKgHint > 0 && (
+                                    <span className="text-[11px] text-muted-foreground">
+                                        (≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt)
+                                    </span>
+                                )}
+                            </Field>
+                            <Field label="Proposed Sale Price ₹/Kg (auto)">
+                                <div className="h-9 flex items-center px-3 rounded-md border border-border/50 bg-muted/30 font-semibold tabular-nums text-sm">
+                                    {wtPerMt > 0 ? (rate > 0 ? num(proposedSalePrice) : "—") : "Set Wt/Mt first"}
+                                </div>
+                            </Field>
+                            {wtPerRoll > 0 && (
+                                <Row label="Wt/Roll (kg)" value={wtPerRoll.toFixed(2)} />
+                            )}
+                            <Field label="Proposed Quantity (Kgs)">
+                                <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-9 text-sm" />
+                                {qty > 0 && (
+                                    <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-amber-600 dark:text-amber-400"}`}>
+                                        {stockCovers ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                                        {stockTotalKg <= 0
+                                            ? "No stock on hand — this quantity will need fresh production."
+                                            : stockCovers
+                                            ? `Covered by stock in hand (${num(stockTotalKg)} kg available).`
+                                            : `Exceeds stock in hand by ${num(stockShortfallKg)} kg (${num(stockTotalKg)} kg available) — shortfall needs production.`}
+                                    </span>
+                                )}
+                            </Field>
+                            {sourcing === "Purchase & resell" && (
+                                <Field label="Purchase Rate ₹/Kg">
+                                    <Input type="number" value={purchaseRate} onChange={e => setPurchaseRate(e.target.value)} className="h-9 text-sm" />
+                                </Field>
+                            )}
+                            <Field label={`Variable Cost ₹/Kg${vcOverride === null ? " (live)" : " (override)"}`}>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        value={vcOverride !== null ? vcOverride : liveVariableCost.toFixed(2)}
+                                        onChange={e => setVcOverride(e.target.value)}
+                                        className="h-9 text-sm"
+                                    />
+                                    {vcOverride !== null && (
+                                        <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px]" onClick={() => setVcOverride(null)}>
+                                            Use live
+                                        </Button>
+                                    )}
+                                </div>
+                                {vcOverride === null && sourcing === "Produce in-house" && !hasCostData && (
+                                    <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                                        No live Mfg Cost for this SKU — showing 0 until you enter an override.
+                                    </span>
+                                )}
+                            </Field>
+                        </CardContent>
+                    </Card>
+
+                    {/* ── Results ── */}
+                    <Card className="card-elevated">
+                        <CardHeader className="py-3 px-4">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Results
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
+                            <Row label="Variable Cost ₹/Kg" value={variableCostIsKnown ? num(variableCost) : "No data"} muted={!variableCostIsKnown} />
+                            <Row
+                                label="Contribution ₹/Kg"
+                                value={canQuote ? num(contributionPerKg) : "—"}
+                                emphasize
+                                negative={canQuote && contributionPerKg < 0}
+                            />
+                            <Row label="P/V Ratio" value={canQuote ? `${(pvRatio * 100).toFixed(1)}%` : "—"} />
+                            <Row
+                                label="Total Contribution (deal)"
+                                value={canQuote ? `₹ ${num(totalContribution)}` : "—"}
+                                emphasize
+                                negative={canQuote && totalContribution < 0}
+                            />
+                            <div className="mt-1 pt-2.5 border-t border-border/30 flex flex-col gap-2">
+                                <Row label="Floor SP (do not quote below)" value={variableCostIsKnown ? num(floorSp) : "No data"} muted={!variableCostIsKnown} />
+                                <Row label="SP for 15% margin" value={variableCostIsKnown ? num(spFor15) : "No data"} muted={!variableCostIsKnown} />
+                            </div>
+                            <div className="mt-2">
+                                <Badge variant="outline" className={`w-full justify-center py-2 text-xs font-semibold ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}>
+                                    {canQuote ? VERDICT_LABEL[verdict] : "Enter Rate/Mt to see verdict"}
+                                </Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+function Row({ label, value, emphasize, negative, muted }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean }) {
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{label}</span>
+            <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : "font-medium"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
+                {value}
+            </span>
+        </div>
+    );
+}
