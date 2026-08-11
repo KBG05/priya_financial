@@ -45,6 +45,7 @@ export function QuoteBuilderPage({ fy }: Props) {
     const [skuOptions, setSkuOptions] = useState<QuoteBuilderSkuOption[]>([]);
     const [skuSearch, setSkuSearch] = useState("");
     const [skuOpen, setSkuOpen] = useState(false);
+    const [skuHighlight, setSkuHighlight] = useState(0);
     const [selectedCode, setSelectedCode] = useState<number | null>(null);
     const [inStockOnly, setInStockOnly] = useState(true);
 
@@ -87,6 +88,41 @@ export function QuoteBuilderPage({ fy }: Props) {
             o => o.product_name.toLowerCase().includes(q) || String(o.code).includes(q)
         ).slice(0, 50);
     }, [skuOptions, skuSearch]);
+
+    // Keep the highlighted option in range whenever the filtered list changes underneath it.
+    useEffect(() => {
+        setSkuHighlight(0);
+    }, [filteredSkus]);
+
+    function chooseSku(code: number) {
+        setSelectedCode(code);
+        setSkuOpen(false);
+        setSkuSearch("");
+    }
+
+    function onSkuSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (!skuOpen) {
+            if (e.key === "ArrowDown" || e.key === "Enter") {
+                setSkuOpen(true);
+                setSkuSearch("");
+            }
+            return;
+        }
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setSkuHighlight(i => Math.min(i + 1, filteredSkus.length - 1));
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setSkuHighlight(i => Math.max(i - 1, 0));
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            const opt = filteredSkus[skuHighlight];
+            if (opt) chooseSku(opt.code);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            setSkuOpen(false);
+        }
+    }
 
     const wtPerMt = sku?.mts_per_kg && sku.mts_per_kg > 0 ? 1 / sku.mts_per_kg : 0; // Wt/Mt = kg per metre
     const wtPerRoll = wtPerMt > 0 ? wtPerMt * (selectedCode != null && selectedCode < 300 ? 50 : 30) : 0;
@@ -143,31 +179,43 @@ export function QuoteBuilderPage({ fy }: Props) {
                     <div className="relative w-full sm:max-w-lg">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                         <Input
+                            role="combobox"
+                            aria-label="Search SKU code or product name"
+                            aria-expanded={skuOpen}
+                            aria-controls="sku-listbox"
+                            aria-autocomplete="list"
+                            aria-activedescendant={skuOpen && filteredSkus[skuHighlight] ? `sku-option-${filteredSkus[skuHighlight].code}` : undefined}
                             value={skuOpen ? skuSearch : (selectedOption ? `${selectedOption.code} — ${selectedOption.product_name}` : skuSearch)}
                             onChange={e => { setSkuSearch(e.target.value); setSkuOpen(true); }}
                             onFocus={() => { setSkuOpen(true); setSkuSearch(""); }}
+                            onKeyDown={onSkuSearchKeyDown}
                             placeholder="Search SKU code or product name…"
                             className="h-8 pl-9 pr-8 text-sm"
                         />
                         {selectedOption && !skuOpen && (
                             <button
                                 onClick={() => { setSelectedCode(null); setSkuSearch(""); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                aria-label="Clear selected SKU"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                             >
                                 <X size={14} />
                             </button>
                         )}
                         {skuOpen && (
-                            <div className="absolute z-40 mt-1 w-full max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
+                            <div id="sku-listbox" role="listbox" className="absolute z-40 mt-1 w-full max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
                                 {filteredSkus.length === 0 ? (
                                     <div className="px-3 py-3 text-sm text-muted-foreground">
                                         No matching SKUs{inStockOnly ? " with stock on hand." : "."}
                                     </div>
-                                ) : filteredSkus.map(o => (
+                                ) : filteredSkus.map((o, i) => (
                                     <button
                                         key={o.code}
-                                        onClick={() => { setSelectedCode(o.code); setSkuOpen(false); setSkuSearch(""); }}
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center gap-3"
+                                        id={`sku-option-${o.code}`}
+                                        role="option"
+                                        aria-selected={i === skuHighlight}
+                                        onClick={() => chooseSku(o.code)}
+                                        onMouseEnter={() => setSkuHighlight(i)}
+                                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${i === skuHighlight ? "bg-muted/50" : ""}`}
                                     >
                                         <span className="text-muted-foreground w-10 shrink-0 tabular-nums text-xs">{o.code}</span>
                                         <span className="text-foreground">{o.product_name}</span>
@@ -185,7 +233,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                             type="checkbox"
                             checked={inStockOnly}
                             onChange={e => setInStockOnly(e.target.checked)}
-                            className="h-3.5 w-3.5 rounded border-border accent-primary"
+                            className="h-3.5 w-3.5 rounded border-border accent-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                         />
                         Only show SKUs with stock on hand
                     </label>
