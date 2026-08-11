@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,61 @@ function ceilingToStep(value: number, step: number): number {
 function num(v: number): string {
     if (v == null || isNaN(v)) return "—";
     return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function usePrefersReducedMotion(): boolean {
+    const [reduced, setReduced] = useState(
+        () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+    useEffect(() => {
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const handler = () => setReduced(mq.matches);
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+    }, []);
+    return reduced;
+}
+
+function easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+/**
+ * Smoothly tweens a displayed number toward `target` whenever it changes, instead of
+ * snapping — makes the Deal Verdict band read as live-recalculating rather than a static
+ * re-render. Interrupting mid-animation re-anchors from the current displayed value, so
+ * rapid keystrokes chain smoothly instead of jumping. Skips animation entirely under
+ * prefers-reduced-motion.
+ */
+function useAnimatedNumber(target: number, durationMs = 350): number {
+    const reducedMotion = usePrefersReducedMotion();
+    const [display, setDisplay] = useState(target);
+    const stateRef = useRef({ display: target, raf: 0 });
+
+    useEffect(() => {
+        if (reducedMotion || !Number.isFinite(target)) {
+            cancelAnimationFrame(stateRef.current.raf);
+            stateRef.current.display = target;
+            setDisplay(target);
+            return;
+        }
+        const from = stateRef.current.display;
+        if (from === target) return;
+        const start = performance.now();
+        cancelAnimationFrame(stateRef.current.raf);
+
+        function tick(now: number) {
+            const t = Math.min(1, (now - start) / durationMs);
+            const value = from + (target - from) * easeOutCubic(t);
+            stateRef.current.display = value;
+            setDisplay(value);
+            if (t < 1) stateRef.current.raf = requestAnimationFrame(tick);
+        }
+        stateRef.current.raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(stateRef.current.raf);
+    }, [target, durationMs, reducedMotion]);
+
+    return display;
 }
 
 export function QuoteBuilderPage({ fy }: Props) {
@@ -162,6 +217,28 @@ export function QuoteBuilderPage({ fy }: Props) {
 
     const canQuote = proposedSalePrice > 0 && variableCostIsKnown;
     const selectedOption = skuOptions.find(o => o.code === selectedCode);
+
+    // Live Deal Verdict: every displayed number tweens toward its new value instead of
+    // snapping, and the verdict badge pulses when a keystroke pushes the deal across a
+    // REJECT/CAUTION/ACCEPTABLE/STRONG threshold.
+    const animVariableCost = useAnimatedNumber(variableCost);
+    const animContributionPerKg = useAnimatedNumber(contributionPerKg);
+    const animPvRatio = useAnimatedNumber(pvRatio);
+    const animTotalContribution = useAnimatedNumber(totalContribution);
+    const animFloorSp = useAnimatedNumber(floorSp);
+    const animSpFor15 = useAnimatedNumber(spFor15);
+
+    const [verdictPulsing, setVerdictPulsing] = useState(false);
+    const prevVerdictRef = useRef(verdict);
+    useEffect(() => {
+        if (canQuote && prevVerdictRef.current !== verdict) {
+            setVerdictPulsing(true);
+            const t = setTimeout(() => setVerdictPulsing(false), 500);
+            prevVerdictRef.current = verdict;
+            return () => clearTimeout(t);
+        }
+        prevVerdictRef.current = verdict;
+    }, [verdict, canQuote]);
 
     function resetDeal() {
         setRatePerMt("");
@@ -446,33 +523,36 @@ export function QuoteBuilderPage({ fy }: Props) {
                         <CardContent className="px-0 pb-0">
                             <div className="flex flex-col lg:flex-row lg:items-stretch">
                                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border/60">
-                                    <StatTile label="Variable Cost ₹/Kg" value={variableCostIsKnown ? num(variableCost) : "No data"} muted={!variableCostIsKnown} />
+                                    <StatTile label="Variable Cost ₹/Kg" value={variableCostIsKnown ? num(animVariableCost) : "No data"} muted={!variableCostIsKnown} />
                                     <StatTile
                                         label="Contribution ₹/Kg"
-                                        value={canQuote ? num(contributionPerKg) : "—"}
+                                        value={canQuote ? num(animContributionPerKg) : "—"}
                                         negative={canQuote && contributionPerKg < 0}
                                         lead
                                     />
-                                    <StatTile label="P/V Ratio" value={canQuote ? `${(pvRatio * 100).toFixed(1)}%` : "—"} />
+                                    <StatTile label="P/V Ratio" value={canQuote ? `${(animPvRatio * 100).toFixed(1)}%` : "—"} />
                                     <StatTile
                                         label="Total Contribution (deal)"
-                                        value={canQuote ? `₹ ${num(totalContribution)}` : "—"}
+                                        value={canQuote ? `₹ ${num(animTotalContribution)}` : "—"}
                                         negative={canQuote && totalContribution < 0}
                                         lead
                                     />
                                 </div>
                                 <div className="flex items-center justify-center px-5 py-4 lg:w-56 shrink-0 border-t lg:border-t-0 lg:border-l border-border/60 bg-muted/20">
-                                    <Badge variant="outline" className={`w-full justify-center py-2.5 text-xs font-semibold ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}>
+                                    <Badge
+                                        variant="outline"
+                                        className={`w-full justify-center py-2.5 text-xs font-semibold transition-colors duration-500 ease-out motion-reduce:transition-none ${verdictPulsing ? "animate-verdict-pulse" : ""} ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}
+                                    >
                                         {canQuote ? VERDICT_LABEL[verdict] : "Enter Rate/Mt to see verdict"}
                                     </Badge>
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-x-8 gap-y-1.5 px-4 py-3 border-t border-border/60 text-xs">
                                 <span className="text-muted-foreground">
-                                    Floor SP (do not quote below): <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(floorSp) : "No data"}</span>
+                                    Floor SP (do not quote below): <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(animFloorSp) : "No data"}</span>
                                 </span>
                                 <span className="text-muted-foreground">
-                                    SP for 15% margin: <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(spFor15) : "No data"}</span>
+                                    SP for 15% margin: <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(animSpFor15) : "No data"}</span>
                                 </span>
                             </div>
                         </CardContent>
