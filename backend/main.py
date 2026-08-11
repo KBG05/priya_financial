@@ -110,7 +110,18 @@ def get_fy_list():
 def get_months(fy: str = Query(FY)):
     rows = query(f"SELECT DISTINCT month FROM pal_1_{fy}")
     available = [r["month"] for r in rows]
-    return {"months": [m for m in MONTH_ORDER if m in available]}
+    ordered = [m for m in MONTH_ORDER if m in available]
+
+    # Months are pre-seeded with placeholder (all-zero) rows before upload,
+    # so "available" alone isn't a reliable default — find the latest month
+    # that actually has non-zero uploaded data.
+    data_rows = query(
+        f"SELECT month, SUM(ABS(COALESCE(value, 0))) AS tot FROM pal_1_{fy} GROUP BY month"
+    )
+    months_with_data = {r["month"] for r in data_rows if (r["tot"] or 0) > 0}
+    latest_with_data = next((m for m in reversed(ordered) if m in months_with_data), None)
+
+    return {"months": ordered, "latest_with_data": latest_with_data}
 
 
 @app.get("/pal1")

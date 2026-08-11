@@ -13,7 +13,7 @@ async function get<T>(path: string, params?: Record<string, string>): Promise<T>
 
 export const api = {
     fyList: () => get<{ fy_list: string[]; default: string }>("/fy"),
-    months: (fy?: string) => get<{ months: string[] }>("/months", fy ? { fy } : undefined),
+    months: (fy?: string) => get<{ months: string[]; latest_with_data: string | null }>("/months", fy ? { fy } : undefined),
     pal1: (months: string[], fy?: string) => get<{ data: any[] }>("/pal1", { months: months.join(","), ...(fy ? { fy } : {}) }),
     mty: (months: string[], fy?: string) => get<{ data: any[] }>("/mty", { months: months.join(","), ...(fy ? { fy } : {}) }),
     consumption: (months: string[], fy?: string) => get<{ data: any[] }>("/consumption", { months: months.join(","), ...(fy ? { fy } : {}) }),
