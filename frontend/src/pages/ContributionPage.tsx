@@ -194,7 +194,7 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
                 { title: "Negative Margin SKUs",       value: negativeCount,     deltaMode: "inverse" },
             ]} />
 
-            <Card className="card-elevated">
+            <Card className="card-elevated py-0 gap-0">
                 <CardHeader className="py-2 px-4">
                     <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         Top {Math.min(TOP_N, chartRows.length)} Products — Contribution Value
@@ -337,7 +337,7 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
                     <ChevronRight size={15} className="text-muted-foreground shrink-0" />
                 </button>
             ) : (
-            <Card className="card-elevated">
+            <Card className="card-elevated py-0 gap-0">
                 <CardHeader className="py-2 px-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <button onClick={() => setShowFullTable(false)} className="flex items-center gap-1.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors">

@@ -21,6 +21,8 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -58,6 +60,9 @@
   --positive: 175 55% 30%;
   --destructive: 6 72% 46%;
   --destructive-foreground: 0 0% 100%;
+  --warning: 32 95% 40%;
+  /* caution/thin-margin state — kept off the brand hue like destructive, so it reads as its own semantic signal */
+  --warning-foreground: 0 0% 100%;
   --border: 204 16% 80%;
   --input: 204 16% 78%;
   --ring: 175 68% 26%;
@@ -93,6 +98,8 @@
   --positive: 174 55% 55%;
   --destructive: 6 72% 58%;
   --destructive-foreground: 0 0% 100%;
+  --warning: 40 96% 58%;
+  --warning-foreground: 210 34% 8%;
   --border: 208 18% 22%;
   --input: 208 18% 24%;
   --ring: 174 62% 55%;

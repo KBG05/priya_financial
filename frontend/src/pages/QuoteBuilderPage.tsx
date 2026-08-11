@@ -17,7 +17,7 @@ type Verdict = "REJECT" | "CAUTION" | "ACCEPTABLE" | "STRONG";
 
 const VERDICT_STYLE: Record<Verdict, string> = {
     REJECT: "bg-destructive/15 text-destructive border-destructive/40",
-    CAUTION: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40",
+    CAUTION: "bg-warning/15 text-warning border-warning/40",
     ACCEPTABLE: "bg-primary/10 text-primary border-primary/30",
     STRONG: "bg-primary/20 text-primary border-primary/50",
 };
@@ -273,7 +273,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                             <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
                                 <div className="font-semibold text-base text-foreground">{sku.product_name}</div>
                                 {skuWarning && (
-                                    <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-2 py-1.5">
+                                    <p className="flex items-start gap-1.5 text-xs text-warning bg-warning/10 rounded-md px-2 py-1.5">
                                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
                                         {skuWarning}
                                     </p>
@@ -396,7 +396,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                 <Field label="Proposed Quantity (Kgs)">
                                     <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-9 text-sm" />
                                     {qty > 0 && (
-                                        <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-amber-600 dark:text-amber-400"}`}>
+                                        <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-warning"}`}>
                                             {stockCovers ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                                             {stockTotalKg <= 0
                                                 ? "No stock on hand — this quantity will need fresh production."
@@ -426,7 +426,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                         )}
                                     </div>
                                     {vcOverride === null && sourcing === "Produce in-house" && !hasCostData && (
-                                        <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                                        <span className="text-[11px] text-warning">
                                             No live Mfg Cost for this SKU — showing 0 until you enter an override.
                                         </span>
                                     )}
