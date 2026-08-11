@@ -50,11 +50,13 @@ function Dashboard() {
   useEffect(() => {
     if (!fy) return;
     setLoading(true);
-    api.months(fy).then(({ months: m }) => {
+    api.months(fy).then(({ months: m, latest_with_data }) => {
       setAvailableMonths(m);
       if (m.length > 0) {
-        setMonths([m[m.length - 1]]);
-        setPrevMonths(m.length > 1 ? [m[m.length - 2]] : []);
+        const defaultMonth = latest_with_data ?? m[m.length - 1];
+        const idx = m.indexOf(defaultMonth);
+        setMonths([defaultMonth]);
+        setPrevMonths(idx > 0 ? [m[idx - 1]] : []);
       }
       setLoading(false);
     });

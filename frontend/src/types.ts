@@ -68,6 +68,11 @@ export interface QuoteBuilderSku {
     hist_avg_sp_per_kg: number;
     hist_purchase_rate_per_kg: number;
     has_cost_data: boolean;
+    rm_price: number | null;
+    yarn_conversion: number | null;
+    fabric_addon: number | null;
+    fabricator_cost: number | null;
+    has_breakdown: boolean;
 }
 
 export interface QuoteBuilderStockRow {

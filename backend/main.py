@@ -5,6 +5,7 @@ Set DATABASE_URL env var to switch. See db.py.
 """
 
 import os
+from datetime import date
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -23,7 +24,14 @@ except ImportError:
 
 load_dotenv()
 
-FY = os.getenv("FY_SUFFIX", "25_26")
+def _current_fy() -> str:
+    """Indian fiscal year (Apr-Mar) suffix for today, e.g. '26_27'."""
+    today = date.today()
+    start_year = today.year if today.month >= 4 else today.year - 1
+    return f"{start_year % 100}_{(start_year + 1) % 100}"
+
+
+FY = os.getenv("FY_SUFFIX") or _current_fy()
 MONTH_ORDER = [
     "Apr",
     "May",
@@ -102,7 +110,18 @@ def get_fy_list():
 def get_months(fy: str = Query(FY)):
     rows = query(f"SELECT DISTINCT month FROM pal_1_{fy}")
     available = [r["month"] for r in rows]
-    return {"months": [m for m in MONTH_ORDER if m in available]}
+    ordered = [m for m in MONTH_ORDER if m in available]
+
+    # Months are pre-seeded with placeholder (all-zero) rows before upload,
+    # so "available" alone isn't a reliable default — find the latest month
+    # that actually has non-zero uploaded data.
+    data_rows = query(
+        f"SELECT month, SUM(ABS(COALESCE(value, 0))) AS tot FROM pal_1_{fy} GROUP BY month"
+    )
+    months_with_data = {r["month"] for r in data_rows if (r["tot"] or 0) > 0}
+    latest_with_data = next((m for m in reversed(ordered) if m in months_with_data), None)
+
+    return {"months": ordered, "latest_with_data": latest_with_data}
 
 
 @app.get("/pal1")
@@ -282,12 +301,16 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
     row = spec[0]
     cost = None
     has_direct_mfg_col = _column_exists(table, "mfg_cost_per_kg")
+    breakdown_cols = ["rm_price", "yarn_conversion", "fabric_addon", "fabrication_per_kg", "fab_rate_increase"]
+    present_breakdown_cols = [c for c in breakdown_cols if _column_exists(table, c)]
+    has_breakdown = len(present_breakdown_cols) == len(breakdown_cols)
     if latest_month:
         month = latest_month[0]["month"]
         mfg_cost_select = "mfg_cost_per_kg" if has_direct_mfg_col else "manufacturing_cost, produced_qty"
+        extra_select = (", " + ", ".join(present_breakdown_cols)) if present_breakdown_cols else ""
         cost_rows = query(
             f"""SELECT month, {mfg_cost_select}, selling_price_per_kg,
-                    purchase_value_used, purchase_qty_used
+                    purchase_value_used, purchase_qty_used{extra_select}
                 FROM {table} WHERE product_id = :code AND month = :month
                 LIMIT 1""",
             {"code": code, "month": month},
@@ -305,6 +328,14 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
                 "mfg_cost_per_kg": c["mfg_cost_per_kg"],
                 "hist_avg_sp_per_kg": c["selling_price_per_kg"],
                 "hist_purchase_rate_per_kg": hist_purchase_rate,
+                "rm_price": c.get("rm_price"),
+                "yarn_conversion": c.get("yarn_conversion"),
+                "fabric_addon": c.get("fabric_addon"),
+                "fabricator_cost": (
+                    (c.get("fabrication_per_kg") or 0) + (c.get("fab_rate_increase") or 0)
+                    if has_breakdown else None
+                ),
+                "has_breakdown": has_breakdown,
             }
 
     warning = None if cost else f"No costing history for this SKU in FY {fy} — this SKU may not have been produced/sold this year."
@@ -320,6 +351,11 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
                 "mfg_cost_per_kg": 0,
                 "hist_avg_sp_per_kg": 0,
                 "hist_purchase_rate_per_kg": 0,
+                "rm_price": None,
+                "yarn_conversion": None,
+                "fabric_addon": None,
+                "fabricator_cost": None,
+                "has_breakdown": False,
             }),
         },
         "warning": warning,
