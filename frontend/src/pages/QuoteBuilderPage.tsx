@@ -138,8 +138,8 @@ export function QuoteBuilderPage({ fy }: Props) {
     return (
         <div className="flex flex-col gap-3 min-w-0 w-full">
             {/* ── SKU picker ── */}
-            <Card className="card-elevated">
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <Card className="card-elevated py-0 gap-0">
+                <CardContent className="p-2.5 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="relative w-full sm:max-w-lg">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                         <Input
@@ -147,7 +147,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                             onChange={e => { setSkuSearch(e.target.value); setSkuOpen(true); }}
                             onFocus={() => { setSkuOpen(true); setSkuSearch(""); }}
                             placeholder="Search SKU code or product name…"
-                            className="h-10 pl-9 pr-8 text-sm"
+                            className="h-8 pl-9 pr-8 text-sm"
                         />
                         {selectedOption && !skuOpen && (
                             <button
@@ -216,7 +216,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                 <div className="flex flex-col gap-5">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* ── Auto-filled SKU info ── */}
-                        <Card className="card-elevated">
+                        <Card className="card-elevated py-0 gap-0">
                             <CardHeader className="py-3 px-4">
                                 <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                     SKU — {sku.code}
@@ -311,7 +311,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                         </Card>
 
                         {/* ── Deal terms ── */}
-                        <Card className="card-elevated">
+                        <Card className="card-elevated py-0 gap-0">
                             <CardHeader className="py-3 px-4">
                                 <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                     Quote Terms
@@ -389,7 +389,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                     </div>
 
                     {/* ── Deal verdict — the payoff of the calculator, given full-width presence ── */}
-                    <Card className="card-elevated overflow-hidden">
+                    <Card className="card-elevated py-0 gap-0 overflow-hidden">
                         <CardHeader className="py-3 px-4">
                             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Deal Verdict
