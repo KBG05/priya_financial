@@ -81,9 +81,9 @@ function Dashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Command rail — persistent left navigation */}
-      <aside className="hidden md:flex flex-col w-56 shrink-0 bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border">
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Command rail — persistent left navigation, pinned independent of page scroll */}
+      <aside className="hidden md:flex flex-col w-56 shrink-0 h-screen bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border">
         <div className="flex items-center gap-2.5 h-16 px-5 border-b border-sidebar-border/80">
           <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-7 w-auto object-contain" />
           <div className="flex flex-col justify-center min-w-0">
@@ -123,17 +123,17 @@ function Dashboard() {
         </div>
       </aside>
 
-      {/* Main column */}
-      <div className="flex flex-col flex-1 min-w-0">
+      {/* Main column — scrolls independently, sidebar stays put */}
+      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-y-auto">
         {/* Top bar — page identity + global controls */}
         <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
-          <div className="flex items-center h-16 px-5 gap-4">
+          <div className="flex items-center h-12 px-5 gap-4">
             <div className="flex items-center gap-2.5 min-w-0 md:hidden">
               <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-6 w-auto object-contain" />
             </div>
-            <div className="flex flex-col min-w-0">
-              <h1 className="font-display text-lg font-semibold leading-tight text-foreground truncate">{active.label}</h1>
-              <p className="text-xs text-muted-foreground truncate">{active.blurb}</p>
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h1 className="font-display text-base font-semibold leading-tight text-foreground truncate">{active.label}</h1>
+              <p className="text-xs text-muted-foreground truncate hidden sm:block">{active.blurb}</p>
             </div>
             <div className="flex-1" />
             <TopBarRight availableMonths={availableMonths} fy={fy} availableFYs={availableFYs} />
@@ -160,14 +160,10 @@ function Dashboard() {
           </nav>
         </header>
 
-        <main className="px-5 py-5 flex flex-col gap-4 overflow-x-hidden min-w-0">
-          {/* Period headline — which slice of the year is currently in view */}
-          <p className="font-display text-sm font-semibold tracking-tight text-primary -mb-1">
-            {periodLabel(fy, viewMode, months)}
-          </p>
-
-          {/* Filters */}
+        <main className="px-5 py-3 flex flex-col gap-3 overflow-x-hidden min-w-0">
+          {/* Filters — period (FY/month) shown inline with the fiscal-year label, no separate headline row */}
           <FilterBar
+            periodLabel={periodLabel(fy, viewMode, months)}
             availableMonths={availableMonths}
             availableFYs={availableFYs}
             fy={fy}

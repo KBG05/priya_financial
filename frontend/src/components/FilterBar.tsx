@@ -25,11 +25,13 @@ interface FilterBarProps {
     onFyChange: (fy: string) => void;
     onViewModeChange: (vm: ViewMode) => void;
     onMonthsChange: (months: string[]) => void;
+    /** Which slice of the year is currently in view — shown inline instead of a separate headline row. */
+    periodLabel?: string;
 }
 
 export function FilterBar({
     availableMonths, availableFYs, fy, viewMode, selectedMonths,
-    onFyChange, onViewModeChange, onMonthsChange,
+    onFyChange, onViewModeChange, onMonthsChange, periodLabel,
 }: FilterBarProps) {
     const curMonth = selectedMonths[selectedMonths.length - 1] ?? availableMonths[availableMonths.length - 1];
 
@@ -68,13 +70,13 @@ export function FilterBar({
     };
 
     return (
-        <div className="flex flex-wrap items-end gap-4 px-4 py-3 bg-card border border-border/70 rounded-xl">
+        <div className="flex flex-wrap items-end gap-3 px-3 py-2 bg-card border border-border/70 rounded-xl">
             {/* Fiscal Year — always visible */}
             <>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Fiscal Year</label>
                     <Select value={fy} onValueChange={onFyChange}>
-                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm font-semibold font-display">
+                        <SelectTrigger className="w-28 h-7 bg-background border-border text-sm font-semibold font-display">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent {...scProps}>
@@ -86,13 +88,13 @@ export function FilterBar({
                         </SelectContent>
                     </Select>
                 </div>
-                <Separator orientation="vertical" className="h-9 self-end mb-0.5 bg-border hidden sm:block" />
+                <Separator orientation="vertical" className="h-8 self-end mb-0.5 bg-border hidden sm:block" />
             </>
             {/* View Mode */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">View</label>
                 <Select value={viewMode} onValueChange={handleViewModeChange}>
-                    <SelectTrigger className="w-40 h-8 bg-background border-border text-sm">
+                    <SelectTrigger className="w-40 h-7 bg-background border-border text-sm">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent {...scProps}>
@@ -103,14 +105,14 @@ export function FilterBar({
                 </Select>
             </div>
 
-            <Separator orientation="vertical" className="h-9 self-end mb-0.5 bg-border hidden sm:block" />
+            <Separator orientation="vertical" className="h-8 self-end mb-0.5 bg-border hidden sm:block" />
 
             {/* Single month picker */}
             {viewMode === "single" && (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Month</label>
                     <Select value={curMonth} onValueChange={m => onMonthsChange([m])}>
-                        <SelectTrigger className="w-28 h-8 bg-background border-border text-sm">
+                        <SelectTrigger className="w-28 h-7 bg-background border-border text-sm">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent {...scProps}>
@@ -123,10 +125,10 @@ export function FilterBar({
             {/* Quarterly: preset + custom */}
             {viewMode === "quarterly" && (
                 <>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Preset</label>
                         <Select value="" onValueChange={q => onMonthsChange(QUARTERS[q].filter(m => availableMonths.includes(m)))}>
-                            <SelectTrigger className="w-36 h-8 bg-background border-border text-sm">
+                            <SelectTrigger className="w-36 h-7 bg-background border-border text-sm">
                                 <SelectValue placeholder="Quarter…" />
                             </SelectTrigger>
                             <SelectContent {...scProps}>
@@ -134,11 +136,11 @@ export function FilterBar({
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Custom (≤ 3)</label>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="h-8 min-w-35 justify-between bg-background border-border font-normal text-sm px-3 gap-1.5">
+                                <Button variant="outline" className="h-7 min-w-35 justify-between bg-background border-border font-normal text-sm px-3 gap-1.5">
                                     <span className="flex gap-1 flex-wrap max-w-25 overflow-hidden">
                                         {selectedMonths.length > 0
                                             ? selectedMonths.map(m => <Badge key={m} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">{m}</Badge>)
@@ -169,6 +171,12 @@ export function FilterBar({
                         Showing all {availableMonths.length} month{availableMonths.length !== 1 ? "s" : ""}
                     </span>
                 </div>
+            )}
+
+            {periodLabel && (
+                <span className="ml-auto self-end mb-1 font-display text-xs font-semibold tracking-tight text-primary truncate">
+                    {periodLabel}
+                </span>
             )}
         </div>
     );

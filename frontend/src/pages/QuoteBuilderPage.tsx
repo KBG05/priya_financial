@@ -136,18 +136,15 @@ export function QuoteBuilderPage({ fy }: Props) {
     }
 
     return (
-        <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-base font-semibold text-foreground">Quote Builder</h2>
-                    <p className="text-sm text-muted-foreground">Price a single deal against live PMC costing.</p>
-                </div>
-                {sku && (
+        <div className="flex flex-col gap-3 min-w-0 w-full">
+            {/* Page title/blurb already shown in the app header above — no need to repeat it here. */}
+            {sku && (
+                <div className="flex justify-end">
                     <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={resetDeal}>
                         <RotateCcw size={13} /> Reset deal terms
                     </Button>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* ── SKU picker ── */}
             <Card className="card-elevated">
