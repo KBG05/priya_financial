@@ -232,17 +232,8 @@ export function QuoteBuilderPage({ fy }: Props) {
                                     {skuWarning}
                                 </p>
                             )}
-                            <Row label="Mfg Cost ₹/Kg (live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} />
-                            <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
-                            <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
-                            <Row
-                                label="Wt/Mt"
-                                value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
-                            />
-                            {sku.month && (
-                                <span className="text-[11px] text-muted-foreground">Costing basis: {sku.month} (latest available)</span>
-                            )}
-                            <div className="mt-2 pt-3 border-t border-border/30">
+
+                            <div className="pb-3 border-b border-border/30">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
                                     {stock.length > 0 && (
@@ -283,6 +274,36 @@ export function QuoteBuilderPage({ fy }: Props) {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="pb-3 border-b border-border/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mfg cost breakdown</span>
+                                    {sku.month && (
+                                        <span className="text-[10px] text-muted-foreground">basis: {sku.month}</span>
+                                    )}
+                                </div>
+                                <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
+                                    <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} />
+                                    <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} />
+                                    <Row label="Fabricator Cost" value={sku.has_breakdown ? num(sku.fabricator_cost!) : "No data"} muted={!sku.has_breakdown} />
+                                    <Row label="Fabric Overheads" value={sku.has_breakdown ? num(sku.fabric_addon!) : "No data"} muted={!sku.has_breakdown} />
+                                </div>
+                                <div className="mt-1.5 pt-1.5 border-t border-border/30">
+                                    <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize />
+                                </div>
+                            </div>
+
+                            <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Historical benchmarks</span>
+                                <div className="flex flex-col gap-2.5 mt-2">
+                                    <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
+                                    <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
+                                    <Row
+                                        label="Wt/Mt"
+                                        value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
+                                    />
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -290,7 +311,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                     <Card className="card-elevated">
                         <CardHeader className="py-3 px-4">
                             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                Deal Terms
+                                Quote Terms
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="px-4 pb-4 flex flex-col gap-3.5 text-sm">
@@ -306,7 +327,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                 </Select>
                             </Field>
                             <Field label="Rate per Mt (₹/Metre)">
-                                <Input type="number" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
+                                <Input type="number" step="0.05" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
                                 {ratePerKgHint > 0 && (
                                     <span className="text-[11px] text-muted-foreground">
                                         (≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt)
