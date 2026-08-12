@@ -1,5 +1,5 @@
-// Parse backend URL from env, fallback to localhost for dev
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Backend is always reached on the same host the frontend was loaded from.
+const BASE = `${window.location.protocol}//${window.location.hostname}:8080`;
 
 import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
 
