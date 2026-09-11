@@ -48,10 +48,14 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
     const prevCurData = prevData.filter(r => r.month === prev);
     // For multi-month view, aggregate across all selected months
     const aggData = viewMode === "single" ? curData : data.filter(r => months.includes(r.month));
-    const totVal = aggData.reduce((s, r) => s + (r.value ?? 0), 0);
-    const totQty = aggData.reduce((s, r) => s + (r.qty ?? 0), 0);
-    const prevTotVal = prevCurData.reduce((s, r) => s + (r.value ?? 0), 0);
-    const prevTotQty = prevCurData.reduce((s, r) => s + (r.qty ?? 0), 0);
+    // "Total Monofil Consumption" is already the grand-total row (it rolls up HDPE/MB/CP and
+    // the raw-material subtotal) — summing every material row would triple/double count them.
+    const totalRows = aggData.filter(r => r.material === "Total Monofil Consumption");
+    const prevTotalRows = prevCurData.filter(r => r.material === "Total Monofil Consumption");
+    const totVal = totalRows.reduce((s, r) => s + (r.value ?? 0), 0);
+    const totQty = totalRows.reduce((s, r) => s + (r.qty ?? 0), 0);
+    const prevTotVal = prevTotalRows.reduce((s, r) => s + (r.value ?? 0), 0);
+    const prevTotQty = prevTotalRows.reduce((s, r) => s + (r.qty ?? 0), 0);
 
     const COMPS = [
         { label: "Opening Stock", qk: "opening_stock_qty", vk: "opening_stock_value" },
