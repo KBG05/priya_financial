@@ -5,13 +5,13 @@ Source: InputTallyTarka/Sales_Pur_Exps-Nov.25.xlsx -> Indirect Expns sheet
 
 Structure:
 - Row 2: Headers (Particulars, Apr, May, ... Mar)
-- Rows 3-40:  Administrative expenses
-- Row 41:     Financial Expenses (total row - SKIP)
-- Rows 42-51: Financial expenses (detail items)
-- Row 52:     Selling Expenses (total row - SKIP)
-- Rows 53-60: Selling expenses (detail items)
+- 'Administrative Expenses' / 'Financial Expenses' / 'Selling Expenses' header
+  rows (carrying the group total), each followed by its ledger rows
+- 'Grand Total' row, followed by a summary block (not ingested)
 
-Total/group-header rows are excluded; we only ingest individual line items.
+Row positions shift as ledgers are added, so groups are found by header label.
+Header/total rows are excluded; we only ingest individual line items, then
+cross-check their sums against the sheet's group and grand totals.
 """
 
 from pathlib import Path
@@ -30,7 +30,7 @@ def create_indirect_expenses_table(conn, fy_suffix: str) -> None:
             month TEXT NOT NULL,
             expense_group TEXT NOT NULL,
             expense_name TEXT NOT NULL,
-            value REAL,
+            value DOUBLE PRECISION,
             UNIQUE(month, expense_name)
         )
     """)
@@ -64,21 +64,20 @@ def safe_float(val) -> Optional[float]:
         return None
 
 
-# Rows that are group totals - should be skipped
-TOTAL_ROWS = {
-    'Indirect Expenses',
-    'Administrative Expenses',  # Row 3 - sum of admin items
-    'Financial Expenses',
-    'Selling Expenses',
+# Group header rows: each carries its group's total and starts a new group.
+# Row positions shift between months as ledgers are added, so groups are
+# detected by these labels rather than fixed row ranges.
+GROUP_HEADERS = {
+    'Administrative Expenses': 'ADMINISTRATIVE',
+    'Financial Expenses': 'FINANCIAL',
+    'Selling Expenses': 'SELLING',
 }
 
-# Row ranges for each expense group
-# (start_row, end_row, group_name)
-EXPENSE_GROUPS = [
-    (4, 40, 'ADMINISTRATIVE'),  # Start from row 4, skip row 3 total
-    (42, 51, 'FINANCIAL'),
-    (53, 64, 'SELLING'),  # Extended to include Transportation, Travelling, Discount rows
-]
+# Sheet title / column header rows above the first group
+SKIP_ROWS = {'Indirect Expenses', 'Particulars'}
+
+# Everything from this row down is a summary block, not ledgers
+GRAND_TOTAL = 'Grand Total'
 
 
 def ingest_indirect_expenses(conn, filepath: Path, fy_suffix: str) -> int:
@@ -113,28 +112,52 @@ def ingest_indirect_expenses(conn, filepath: Path, fy_suffix: str) -> int:
     }
 
     records = []
+    group_totals = {}   # (group, month) -> value on the group header row
+    grand_totals = {}   # month -> value on the Grand Total row
+    group_name = None
 
-    for start_row, end_row, group_name in EXPENSE_GROUPS:
-        for row_idx in range(start_row, end_row + 1):
-            row = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+    for row in ws.iter_rows(min_row=3, values_only=True):
+        expense_name = str(row[0]).strip() if row[0] else None
+        if not expense_name:
+            continue
 
-            expense_name = str(row[0]).strip() if row[0] else None
-            if not expense_name or expense_name == ' ':
-                continue
-
-            # Skip total/header rows
-            if expense_name in TOTAL_ROWS:
-                continue
-
+        if expense_name == GRAND_TOTAL:
             for col_idx, month in month_cols.items():
-                value = safe_float(row[col_idx])
-                if value is not None:
-                    records.append({
-                        'month': month,
-                        'expense_group': group_name,
-                        'expense_name': expense_name,
-                        'value': value,
-                    })
+                grand_totals[month] = safe_float(row[col_idx]) or 0.0
+            break
+
+        if expense_name in GROUP_HEADERS:
+            group_name = GROUP_HEADERS[expense_name]
+            for col_idx, month in month_cols.items():
+                group_totals[(group_name, month)] = safe_float(row[col_idx]) or 0.0
+            continue
+
+        if expense_name in SKIP_ROWS or group_name is None:
+            continue
+
+        for col_idx, month in month_cols.items():
+            value = safe_float(row[col_idx])
+            if value is not None:
+                records.append({
+                    'month': month,
+                    'expense_group': group_name,
+                    'expense_name': expense_name,
+                    'value': value,
+                })
+
+    # Cross-check ingested line items against the sheet's own totals
+    for month in month_cols.values():
+        month_sum = 0.0
+        for group in GROUP_HEADERS.values():
+            got = sum(r['value'] for r in records
+                      if r['month'] == month and r['expense_group'] == group)
+            month_sum += got
+            expected = group_totals.get((group, month), 0.0)
+            if abs(got - expected) > 1:
+                print(f"  ⚠  {month} {group}: line items {got:,.2f} != group total {expected:,.2f}")
+        expected = grand_totals.get(month)
+        if expected is not None and abs(month_sum - expected) > 1:
+            print(f"  ⚠  {month}: line items {month_sum:,.2f} != Grand Total {expected:,.2f}")
 
     wb.close()
 

@@ -146,8 +146,8 @@ def create_purchases_table(conn: PGConnection, fy_suffix: str) -> None:
             month TEXT NOT NULL,
             category TEXT NOT NULL,
             material TEXT NOT NULL,
-            qty REAL, value REAL, rate REAL,
-            discount REAL, discounted_value REAL
+            qty DOUBLE PRECISION, value DOUBLE PRECISION, rate DOUBLE PRECISION,
+            discount DOUBLE PRECISION, discounted_value DOUBLE PRECISION
         )
     """)
     conn.commit()

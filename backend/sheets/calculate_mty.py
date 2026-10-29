@@ -67,6 +67,8 @@ MTY Row Map (Excel row → line_item label):
 
 from typing import Any, Optional, cast
 
+from .ingest_balance_sheet import get_tally_pl, get_tally_opening_stock
+
 
 MONTH_ORDER = [
     "Apr",
@@ -476,6 +478,10 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             (month,),
         )
         monofil_purchase_fabric = total_monofil_for_fabric - monofil_purchase_yarn
+        # Same Tally override as PAL I 'Purchase-Fabric+ Cons' (Consumables - Yarn)
+        tally_cons = get_tally_pl(conn, fy_suffix, month, "Purchase-Consumables")
+        if tally_cons is not None:
+            monofil_purchase_fabric = tally_cons - monofil_purchase_yarn
         d["Monofil Purchase Fabric"] = monofil_purchase_fabric
 
         # Row 20: Trading Purchase
@@ -560,6 +566,26 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             )
         # Excel sign: prev - curr (negative = stock built up, positive = stock released to sales)
         stock_diff_monofil = (wip_prev + fg_monofil_prev) - (wip_curr + fg_monofil_curr)
+
+        # PAL I takes Op/Cl stock from Tally when available; the gap to the component
+        # sum (rounding/adjustments) is carried here so MTY Nett still equals PAL I.
+        stock_month_prev = prev if month != "Apr" else "Op Stock"
+        comp_op = _q1(
+            conn,
+            f"SELECT SUM(value) FROM stock_valuation_{fy_suffix} WHERE month=%s",
+            (stock_month_prev,),
+        )
+        comp_cl = _q1(
+            conn,
+            f"SELECT SUM(value) FROM stock_valuation_{fy_suffix} WHERE month=%s",
+            (month,),
+        )
+        tally_op = get_tally_opening_stock(conn, fy_suffix, month, prev if month != "Apr" else None)
+        tally_cl = get_tally_pl(conn, fy_suffix, month, "Closing Stock")
+        stock_adj = ((tally_op - comp_op) if tally_op is not None else 0.0) - (
+            (tally_cl - comp_cl) if tally_cl is not None else 0.0
+        )
+        stock_diff_monofil += stock_adj
         d["Stock Difference Monofil"] = stock_diff_monofil
 
         # FG difference (Trading only: MSN, TSN, Weed Mat, Misc — NOT Monofil Fishnet Fabrics)
@@ -656,14 +682,15 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Variable-Trading"] = trading_var
 
         # Row 31: Variable-Finance
-        # MIS MTY row 31 = Working Capital-OCC only.
-        # Working Capital-LC and Bank Charges are included in Interest USL (row 43), not here.
+        # MIS "W Cap Int" = Working Capital OCC + Bank Charges + LC (the working-capital
+        # part of the Financial Expenses group). Kept out of Variable-Yarn Cost so the
+        # whole Financial group lands in Finance Cost (row 70).
         finance_var = _q1(
             conn,
             f"""
             SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
             WHERE month=%s AND category='Variable & Direct Expense'
-            AND particulars='Working Capital-OCC'
+            AND particulars IN ('Working Capital-OCC', 'Working Capital-Bank Charges', 'Working Capital-LC')
         """,
             (month,),
         )
@@ -779,15 +806,13 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["Deprnn"] = deprn
 
         # Row 43: Interest USL
-        # MIS MTY row 43 ("Interest") = OCC + Int On Deposits + Int On Term Loan.
-        # OCC is already in Variable-Finance (row 31) for the Total Variable section,
-        # but the Excel also aggregates it here for the Finance Cost / Nett Profit section.
+        # MIS "Int On Others" = Int On Deposits + Int On Term Loan (rest of the
+        # Financial group after the working-capital ledgers in Variable-Finance).
         interest = _q1(
             conn,
             f"""
             SELECT SUM(value) FROM direct_expenses_output_{fy_suffix}
             WHERE month=%s AND particulars IN (
-                'Working Capital-OCC',
                 'Finance Cost-Int On Deposits',
                 'Finance Cost-Int On Term Loan'
             )
@@ -929,10 +954,9 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
         d["EBITDA"] = ebitda
 
         # Row 70: Finance Cost
-        # MIS MTY row 70 = row 43 (Interest USL) only — NOT Variable-Finance + Interest.
-        # Variable-Finance (OCC) is already counted in Total Variable (row 32);
-        # Finance Cost just re-states the total interest charge for the Nett Profit line.
-        finance_cost = interest
+        # MIS "FIN Cost" = W Cap Int (row 31) + Int On Others (row 43) = whole Financial
+        # Expenses group. Variable-Finance is not in COGS, so it is not double-counted.
+        finance_cost = finance_var + interest
         d["Finance Cost"] = finance_cost
 
         # Row 71: Deprn (same as row 42/34)

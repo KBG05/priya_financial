@@ -25,7 +25,7 @@ def create_direct_expenses_table(conn, fy_suffix: str) -> None:
             month TEXT NOT NULL,
             expense_name TEXT NOT NULL,
             category TEXT NOT NULL,
-            value REAL,
+            value DOUBLE PRECISION,
             UNIQUE(month, expense_name)
         )
     """)

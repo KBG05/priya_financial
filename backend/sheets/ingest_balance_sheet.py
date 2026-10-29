@@ -30,7 +30,7 @@ def create_balance_sheet_table(conn, fy_suffix: str) -> None:
             line_item TEXT NOT NULL,
             category TEXT NOT NULL,
             month TEXT NOT NULL,
-            value REAL,
+            value DOUBLE PRECISION,
             UNIQUE(line_item, month)
         )
     """
@@ -217,6 +217,99 @@ def _ingest_tally_format(conn, wb, table_name: str) -> int:
     return len(records)
 
 
+# Tally single-month P&L lines kept as reconciliation figures for PAL I / MTY.
+# Stored with a "PL " prefix so they never clash with balance sheet line items.
+TALLY_PL_LINES = {
+    "Opening Stock",
+    "Closing Stock",
+    "Purchase Accounts",
+    "Purchase-Consumables",
+    "Purchase-Raw Material",
+    "Purchases Trading",
+    "Trade Discount Received on Purchase",
+    "Indirect Expenses",
+}
+TALLY_PL_CATEGORY = "Tally PL"
+
+
+def _find_pl_single_month_sheet(wb) -> Optional[str]:
+    """Return the name of the single-month PL sheet (not the cumulative Apr-XX sheet)."""
+    for name in wb.sheetnames:
+        upper = name.upper()
+        if upper.startswith("PL") and "APR" not in upper:
+            return name
+    return None
+
+
+def _ingest_tally_pl(conn, wb, table_name: str) -> int:
+    """Parse the two-sided single-month P&L sheet and store TALLY_PL_LINES."""
+    sheet_name = _find_pl_single_month_sheet(wb)
+    if not sheet_name:
+        print("  ⚠  No single-month PL sheet found; Tally P&L reconciliation skipped")
+        return 0
+
+    ws = wb[sheet_name]
+    all_rows = list(ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True))
+    month = _extract_month_from_row8(all_rows[7][0] if len(all_rows) > 7 else None)
+    if not month:
+        print(f"  ⚠  Could not extract month from row 8 of '{sheet_name}'; Tally P&L skipped")
+        return 0
+
+    records = []
+    for row in all_rows[10:]:
+        row = tuple(row) + (None,) * (6 - len(row))
+        # Left side: cols A/B/C (expenses), right side: cols D/E/F (income)
+        for name_col in (0, 3):
+            name = str(row[name_col]).strip() if row[name_col] not in (None, "") else None
+            if name not in TALLY_PL_LINES:
+                continue
+            # Group headers carry the value in the total column, ledgers in the item column
+            value = safe_float(row[name_col + 2])
+            if value is None:
+                value = safe_float(row[name_col + 1])
+            if value is not None:
+                records.append({"line_item": f"PL {name}", "category": TALLY_PL_CATEGORY,
+                                "month": month, "value": value})
+        if row[0] and str(row[0]).strip().lower() == "total":
+            break
+
+    cursor = conn.cursor()
+    for rec in records:
+        cursor.execute(
+            f"""INSERT INTO {table_name} (line_item, category, month, value)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (line_item, month) DO UPDATE SET value=EXCLUDED.value, category=EXCLUDED.category""",
+            (rec["line_item"], rec["category"], rec["month"], rec["value"]),
+        )
+    conn.commit()
+    print(f"  Sheet: {sheet_name}, month: {month} → {len(records)} Tally P&L lines")
+    return len(records)
+
+
+def get_tally_pl(conn, fy_suffix: str, month: str, line: str) -> Optional[float]:
+    """Return a stored Tally P&L figure for the month, or None when not ingested."""
+    table_name = f"balance_sheet_{fy_suffix}"
+    exists = conn.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s",
+        (table_name,),
+    ).fetchone()
+    if not exists:
+        return None
+    row = conn.execute(
+        f"SELECT value FROM {table_name} WHERE month=%s AND line_item=%s AND category=%s",
+        (month, f"PL {line}", TALLY_PL_CATEGORY),
+    ).fetchone()
+    return safe_float(row[0]) if row else None
+
+
+def get_tally_opening_stock(conn, fy_suffix: str, month: str, prev_month: Optional[str]) -> Optional[float]:
+    """Tally opening stock: this month's PL Opening Stock, else last month's PL Closing Stock."""
+    value = get_tally_pl(conn, fy_suffix, month, "Opening Stock")
+    if value is None and prev_month:
+        value = get_tally_pl(conn, fy_suffix, prev_month, "Closing Stock")
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -265,6 +358,9 @@ def ingest_balance_sheet(conn, filepath: Path, fy_suffix: str, is_mis: bool | No
     else:
         print("  Format: Tally BS_PL_CF (single-month, auto-detected)")
         total = _ingest_tally_format(conn, wb, table_name)
+
+    # After the BS (whose Tally path clears the month first)
+    total += _ingest_tally_pl(conn, wb, table_name)
 
     wb.close()
 

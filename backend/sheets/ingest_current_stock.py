@@ -37,9 +37,9 @@ def create_current_stock_table(conn) -> None:
             category   TEXT,
             product    TEXT,
             colour     TEXT,
-            qty_mtrs   REAL,
-            qty_kgs    REAL,
-            bales      REAL,
+            qty_mtrs   DOUBLE PRECISION,
+            qty_kgs    DOUBLE PRECISION,
+            bales      DOUBLE PRECISION,
             as_of_date DATE
         )
     """)

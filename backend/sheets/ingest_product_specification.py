@@ -44,14 +44,14 @@ def create_product_specification_table(conn) -> None:
             id                        SERIAL  PRIMARY KEY,
             product_name              TEXT    NOT NULL,
             product_code              INTEGER,
-            width                     REAL,
-            length                    REAL,
-            weight                    REAL,
-            mts_per_kg                REAL,
-            grm                       REAL,
-            gsm                       REAL,
-            fabrication_charge_basic  REAL,
-            fabrication_charge_per_kg REAL,
+            width                     DOUBLE PRECISION,
+            length                    DOUBLE PRECISION,
+            weight                    DOUBLE PRECISION,
+            mts_per_kg                DOUBLE PRECISION,
+            grm                       DOUBLE PRECISION,
+            gsm                       DOUBLE PRECISION,
+            fabrication_charge_basic  DOUBLE PRECISION,
+            fabrication_charge_per_kg DOUBLE PRECISION,
             UNIQUE (product_name)
         )
     """)

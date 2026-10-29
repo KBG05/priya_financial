@@ -31,9 +31,9 @@ def create_inventory_sales_table(conn, fy_suffix: str) -> None:
             month TEXT NOT NULL,
             category TEXT NOT NULL,
             product TEXT NOT NULL,
-            qty REAL,
-            rate REAL,
-            value REAL,
+            qty DOUBLE PRECISION,
+            rate DOUBLE PRECISION,
+            value DOUBLE PRECISION,
             UNIQUE(month, product)
         )
     """)

@@ -31,9 +31,9 @@ def create_stock_valuation_table(conn, fy_suffix: str) -> None:
             material TEXT NOT NULL,
             category TEXT NOT NULL,
             month TEXT NOT NULL,
-            qty REAL,
-            rate REAL,
-            value REAL,
+            qty DOUBLE PRECISION,
+            rate DOUBLE PRECISION,
+            value DOUBLE PRECISION,
             UNIQUE(material, month)
         )
     """)
