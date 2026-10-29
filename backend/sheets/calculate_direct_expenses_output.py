@@ -21,7 +21,7 @@ def create_direct_expenses_output_table(conn, fy_suffix: str) -> None:
             category TEXT NOT NULL,
             particulars TEXT NOT NULL,
             month TEXT NOT NULL,
-            value REAL,
+            value DOUBLE PRECISION,
             UNIQUE(category, particulars, month)
         )
     """)
@@ -415,14 +415,20 @@ def calculate_direct_expenses_output(conn, fy_suffix: str,
             'value': 0.0  # Set to 0 as per user
         })
         
-        # Finance Cost-Int On Deposits (includes VSL interest per MIS classification)
+        # Finance Cost-Int On Deposits = whole FINANCIAL group minus the working-capital
+        # ledgers above (MIS "Int On Others"), so new interest ledgers are never missed.
+        result = conn.execute(f"""
+            SELECT SUM(value) FROM indirect_expenses_{fy_suffix}
+            WHERE month = %s AND expense_group = 'FINANCIAL'
+        """, (month,)).fetchone()
+        working_capital = (get_indirect_expense(conn, fy_suffix, month, 'Bank Charges') +
+                           get_indirect_expense(conn, fy_suffix, month, 'Interest & Bank Charges -ILC') +
+                           get_indirect_expense(conn, fy_suffix, month, 'Interest on O.C.C'))
         records.append({
             'category': 'Fixed Expense',
             'particulars': 'Finance Cost-Int On Deposits',
             'month': month,
-            'value': (get_indirect_expense(conn, fy_suffix, month, 'Interest on Unsecured Loans (Monthly)') +
-                      get_indirect_expense(conn, fy_suffix, month, 'Interest to Depositors') +
-                      get_indirect_expense(conn, fy_suffix, month, 'Interest to others (VSL)'))
+            'value': safe_float(result[0] if result else 0) - working_capital
         })
     
     # Insert records

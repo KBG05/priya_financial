@@ -32,7 +32,7 @@ def create_salary_table(conn, fy_suffix: str) -> None:
             cost_centre TEXT,
             month TEXT NOT NULL,
             emp_count INTEGER,
-            gross_salary REAL,
+            gross_salary DOUBLE PRECISION,
             UNIQUE(department, month)
         )
     """

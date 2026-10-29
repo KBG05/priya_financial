@@ -97,28 +97,28 @@ Target table: contribution_{fy}
     product_id           INT
     product_name         TEXT
     month                TEXT
-    qty                  REAL   -- original sales qty
-    revenue              REAL   -- original sales revenue
-    selling_price_per_kg REAL   -- revenue / qty (never adjusted)
-    rm_price             REAL   -- PMC Stage1 TOTAL: rm_rate_base * yield * (1 + wastage)
-    rm_rate_base         REAL   -- raw RM rate before yield/wastage (PMC B4)
-    wastage_per_kg       REAL   -- PMC B25
-    yarn_conversion      REAL   -- yarn_conversion_per_kg for this month (PMC Stage2 Yarn)
-    fabric_addon         REAL   -- fabric_addon_per_kg for this month (PMC Stage3 common add-on)
-    filament_conversion  REAL   -- yarn_conversion + fabric_addon (kept for backwards compatibility)
-    fabric_cost          REAL   -- rm_price (Stage1) + filament_conversion
-    fabrication_per_kg   REAL   -- spec fab/kg + fab_rate_increase (PMC SKU Master col G)
-    fab_rate_increase    REAL   -- flat PMC B14 uplift included in fabrication_per_kg
-    mfg_cost_per_kg      REAL   -- PMC SKU Master col H
-    mts_per_kg           REAL   -- from product_specification
-    contribution_per_kg  REAL
-    sales_mtrs           REAL
-    contribution_value   REAL
+    qty                  DOUBLE PRECISION   -- original sales qty
+    revenue              DOUBLE PRECISION   -- original sales revenue
+    selling_price_per_kg DOUBLE PRECISION   -- revenue / qty (never adjusted)
+    rm_price             DOUBLE PRECISION   -- PMC Stage1 TOTAL: rm_rate_base * yield * (1 + wastage)
+    rm_rate_base         DOUBLE PRECISION   -- raw RM rate before yield/wastage (PMC B4)
+    wastage_per_kg       DOUBLE PRECISION   -- PMC B25
+    yarn_conversion      DOUBLE PRECISION   -- yarn_conversion_per_kg for this month (PMC Stage2 Yarn)
+    fabric_addon         DOUBLE PRECISION   -- fabric_addon_per_kg for this month (PMC Stage3 common add-on)
+    filament_conversion  DOUBLE PRECISION   -- yarn_conversion + fabric_addon (kept for backwards compatibility)
+    fabric_cost          DOUBLE PRECISION   -- rm_price (Stage1) + filament_conversion
+    fabrication_per_kg   DOUBLE PRECISION   -- spec fab/kg + fab_rate_increase (PMC SKU Master col G)
+    fab_rate_increase    DOUBLE PRECISION   -- flat PMC B14 uplift included in fabrication_per_kg
+    mfg_cost_per_kg      DOUBLE PRECISION   -- PMC SKU Master col H
+    mts_per_kg           DOUBLE PRECISION   -- from product_specification
+    contribution_per_kg  DOUBLE PRECISION
+    sales_mtrs           DOUBLE PRECISION
+    contribution_value   DOUBLE PRECISION
     -- debug fields (nullable, populated when purchase register available)
-    produced_qty         REAL
-    purchase_qty_used    REAL
-    purchase_value_used  REAL
-    manufacturing_cost   REAL
+    produced_qty         DOUBLE PRECISION
+    purchase_qty_used    DOUBLE PRECISION
+    purchase_value_used  DOUBLE PRECISION
+    manufacturing_cost   DOUBLE PRECISION
 """
 
 from typing import Optional
@@ -170,27 +170,27 @@ def _create_table(conn, fy: str) -> None:
             product_id           INTEGER NOT NULL,
             product_name         TEXT,
             month                TEXT    NOT NULL,
-            qty                  REAL,
-            revenue              REAL,
-            selling_price_per_kg REAL,
-            rm_price             REAL,
-            yarn_conversion      REAL,
-            fabric_addon         REAL,
-            filament_conversion  REAL,
-            fabric_cost          REAL,
-            fabrication_per_kg   REAL,
-            rm_rate_base         REAL,
-            wastage_per_kg       REAL,
-            fab_rate_increase    REAL,
-            mfg_cost_per_kg      REAL,
-            mts_per_kg           REAL,
-            contribution_per_kg  REAL,
-            sales_mtrs           REAL,
-            contribution_value   REAL,
-            produced_qty         REAL,
-            purchase_qty_used    REAL,
-            purchase_value_used  REAL,
-            manufacturing_cost   REAL
+            qty                  DOUBLE PRECISION,
+            revenue              DOUBLE PRECISION,
+            selling_price_per_kg DOUBLE PRECISION,
+            rm_price             DOUBLE PRECISION,
+            yarn_conversion      DOUBLE PRECISION,
+            fabric_addon         DOUBLE PRECISION,
+            filament_conversion  DOUBLE PRECISION,
+            fabric_cost          DOUBLE PRECISION,
+            fabrication_per_kg   DOUBLE PRECISION,
+            rm_rate_base         DOUBLE PRECISION,
+            wastage_per_kg       DOUBLE PRECISION,
+            fab_rate_increase    DOUBLE PRECISION,
+            mfg_cost_per_kg      DOUBLE PRECISION,
+            mts_per_kg           DOUBLE PRECISION,
+            contribution_per_kg  DOUBLE PRECISION,
+            sales_mtrs           DOUBLE PRECISION,
+            contribution_value   DOUBLE PRECISION,
+            produced_qty         DOUBLE PRECISION,
+            purchase_qty_used    DOUBLE PRECISION,
+            purchase_value_used  DOUBLE PRECISION,
+            manufacturing_cost   DOUBLE PRECISION
         )
     """)
 
@@ -198,16 +198,16 @@ def _create_table(conn, fy: str) -> None:
 def _migrate_table(conn, fy: str) -> None:
     """Add any debug columns that may be missing from pre-existing tables."""
     debug_cols = [
-        ("produced_qty",      "REAL"),
-        ("purchase_qty_used", "REAL"),
-        ("purchase_value_used", "REAL"),
-        ("manufacturing_cost", "REAL"),
-        ("yarn_conversion",   "REAL"),
-        ("fabric_addon",      "REAL"),
-        ("rm_rate_base",      "REAL"),
-        ("wastage_per_kg",    "REAL"),
-        ("fab_rate_increase", "REAL"),
-        ("mfg_cost_per_kg",   "REAL"),
+        ("produced_qty",      "DOUBLE PRECISION"),
+        ("purchase_qty_used", "DOUBLE PRECISION"),
+        ("purchase_value_used", "DOUBLE PRECISION"),
+        ("manufacturing_cost", "DOUBLE PRECISION"),
+        ("yarn_conversion",   "DOUBLE PRECISION"),
+        ("fabric_addon",      "DOUBLE PRECISION"),
+        ("rm_rate_base",      "DOUBLE PRECISION"),
+        ("wastage_per_kg",    "DOUBLE PRECISION"),
+        ("fab_rate_increase", "DOUBLE PRECISION"),
+        ("mfg_cost_per_kg",   "DOUBLE PRECISION"),
     ]
     for col, dtype in debug_cols:
         try:
