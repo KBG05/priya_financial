@@ -7,7 +7,7 @@ Populates pal_1_{fy_suffix} table with 22 line items per month.
 from pathlib import Path
 from typing import Optional, Dict
 from .db import MONTHS, get_connection
-from .ingest_balance_sheet import get_tally_pl, get_tally_opening_stock
+from .ingest_balance_sheet import get_tally_pl
 
 
 def create_pal_1_table(conn, fy_suffix: str) -> None:
@@ -110,7 +110,9 @@ def calculate_pal_1(conn, fy_suffix: str) -> int:
         op_stock_value = row[1] if row[1] else 0
         # Tally P&L (from the MIS upload) carries the reconciled stock figure;
         # the component sum can miss small adjustments.
-        tally_op = get_tally_opening_stock(conn, fy_suffix, month, prev_month)
+        # Only the month's own P&L: borrowing last month's closing would give
+        # not-yet-uploaded months a stock balance and a fake loss.
+        tally_op = get_tally_pl(conn, fy_suffix, month, "Opening Stock")
         if tally_op is not None:
             if abs(tally_op - op_stock_value) > 1:
                 print(f"    ⚠  {month} Op Stk: components {op_stock_value:,.0f} → Tally {tally_op:,.0f}")
