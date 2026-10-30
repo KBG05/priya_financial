@@ -302,14 +302,6 @@ def get_tally_pl(conn, fy_suffix: str, month: str, line: str) -> Optional[float]
     return safe_float(row[0]) if row else None
 
 
-def get_tally_opening_stock(conn, fy_suffix: str, month: str, prev_month: Optional[str]) -> Optional[float]:
-    """Tally opening stock: this month's PL Opening Stock, else last month's PL Closing Stock."""
-    value = get_tally_pl(conn, fy_suffix, month, "Opening Stock")
-    if value is None and prev_month:
-        value = get_tally_pl(conn, fy_suffix, prev_month, "Closing Stock")
-    return value
-
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------

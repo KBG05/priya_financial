@@ -67,7 +67,7 @@ MTY Row Map (Excel row → line_item label):
 
 from typing import Any, Optional, cast
 
-from .ingest_balance_sheet import get_tally_pl, get_tally_opening_stock
+from .ingest_balance_sheet import get_tally_pl
 
 
 MONTH_ORDER = [
@@ -580,7 +580,7 @@ def calculate_mty(conn, fy_suffix: str, filepath=None) -> int:
             f"SELECT SUM(value) FROM stock_valuation_{fy_suffix} WHERE month=%s",
             (month,),
         )
-        tally_op = get_tally_opening_stock(conn, fy_suffix, month, prev if month != "Apr" else None)
+        tally_op = get_tally_pl(conn, fy_suffix, month, "Opening Stock")
         tally_cl = get_tally_pl(conn, fy_suffix, month, "Closing Stock")
         stock_adj = ((tally_op - comp_op) if tally_op is not None else 0.0) - (
             (tally_cl - comp_cl) if tally_cl is not None else 0.0
