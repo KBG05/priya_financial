@@ -1,0 +1,174 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PriyaFil Fusion Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--g:#f6f7f9;--p:#fff;--i:#101828;--s:#475467;--b:#e4e7ec;--a:#0e6e6e;--at:#e6f1f1;--r:#b42318;--rt:#fdecea;--am:#93600a;--amt:#fdf3e1}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:4500px;overflow:hidden;background:var(--g);color:var(--i);font:14px/1.45 Manrope,sans-serif;font-variant-numeric:tabular-nums}
+.scr{width:1440px;height:900px;display:flex;overflow:hidden;border-bottom:1px solid var(--b)}
+nav{width:232px;background:var(--p);border-right:1px solid var(--b);padding:22px 14px;display:flex;flex-direction:column;gap:2px}
+.mk{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;margin:0 8px 26px}
+.mk i{width:26px;height:26px;border-radius:7px;background:var(--a);display:grid;place-items:center;color:#fff;font-style:normal;font-size:14px}
+nav a{display:block;padding:8px 10px;border-radius:7px;color:var(--s);font-weight:500;text-decoration:none}
+nav a.on{background:var(--at);color:var(--a);font-weight:700}
+nav hr{border:0;border-top:1px solid var(--b);margin:14px 4px}
+nav small{color:var(--s);font-size:12px;margin:0 10px 4px}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+header{height:60px;background:var(--p);border-bottom:1px solid var(--b);display:flex;align-items:center;gap:12px;padding:0 32px}
+header h1{font-size:15px;font-weight:700;margin-right:auto}
+.sel{border:1px solid var(--b);border-radius:8px;padding:7px 12px;font-weight:600;background:var(--p)}
+.sel:after{content:" \25BE";color:var(--s)}
+.tg{display:flex;align-items:center;gap:8px;color:var(--s);font-weight:500}
+.tg b{width:32px;height:18px;border-radius:9px;background:var(--a);position:relative}
+.tg b:after{content:"";position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.bd{padding:26px 32px;display:flex;flex-direction:column;gap:20px}
+.vd{font-size:34px;line-height:1.2;font-weight:700;letter-spacing:-.02em;max-width:1050px}
+.vd em{font-style:normal;color:var(--r)}
+.strip{display:flex;border-top:1px solid var(--b);border-bottom:1px solid var(--b);margin-top:14px}
+.strip div{flex:1;padding:12px 18px 12px 0;border-right:1px solid var(--b);margin-right:18px}
+.strip div:last-child{border:0}
+.strip span{display:block;color:var(--s);font-size:13px}
+.strip b{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.strip small{color:var(--s);font-size:12.5px;margin-left:6px}
+.row{display:flex;gap:20px;align-items:stretch}
+.sec{background:var(--p);border:1px solid var(--b);border-radius:12px;padding:20px 22px}
+.sec h2{font-size:21px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
+.sec p.q{color:var(--s);margin-bottom:14px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12.5px;color:var(--s);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--b)}
+td{padding:9px 8px;border-bottom:1px solid var(--b)}
+tr:last-child td{border-bottom:0}
+.n{text-align:right}.neg{color:var(--r)}.pos{color:var(--a)}
+.st{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:5px}
+.ok{background:var(--at);color:var(--a)}.w{background:var(--amt);color:var(--am)}.bad{background:var(--rt);color:var(--r)}
+.br{display:grid;grid-template-columns:170px 520px 70px;align-items:center;gap:10px;padding:5px 0}
+.br .t{position:relative;height:22px}
+.br .t i{position:absolute;top:0;height:22px;border-radius:3px}
+.br .v{text-align:right;font-weight:700}
+.br.tot{border-top:1px solid var(--b);padding-top:8px}
+.btn{display:inline-block;border:1px solid var(--a);color:var(--a);border-radius:7px;padding:4px 10px;font-weight:700;font-size:12.5px;white-space:nowrap}
+.lk{color:var(--a);font-weight:700;text-decoration:none}
+ul.at{list-style:none}
+ul.at li{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--b)}
+ul.at li:last-child{border:0}
+ul.at .d{width:8px;height:8px;border-radius:50%;margin-top:7px;flex:none}
+.zb{position:relative;width:130px;height:14px;margin:auto}
+.zb:before{content:"";position:absolute;left:65px;top:-3px;bottom:-3px;border-left:1px solid var(--s)}
+.zb i{position:absolute;top:2px;height:10px;border-radius:2px}
+.ch{display:flex;gap:16px;margin-top:4px;color:var(--s);font-size:12.5px}
+.ch i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.bn{display:flex;align-items:center;gap:14px;background:var(--amt);color:var(--am);border:1px solid #f0dcb4;border-radius:10px;padding:11px 16px;font-weight:600}
+.bn .btn{margin-left:auto;background:var(--a);color:#fff;border-color:var(--a);padding:6px 14px}
+.rb{position:relative;width:190px;height:16px}
+.rb:before{content:"";position:absolute;left:0;right:0;top:7px;border-top:1px dashed var(--b)}
+.rb i{position:absolute;top:4px;height:8px;border-radius:4px;background:#cfd4dc}
+.rb b{position:absolute;top:0;width:3px;height:16px;border-radius:2px;margin-left:-1.5px}
+.tt td{padding:5px 8px}.pmr td{padding:7px 8px}
+td.df{color:var(--s);font-size:13px}
+</style></head><body>
+
+<!-- SCREEN 1: OVERVIEW -->
+<section class="scr"><nav><div class="mk"><i>P</i>PriyaFil</div><a class="on">Overview</a><a>Profit &amp; Margin</a><a>Costs</a><a>Inventory &amp; Materials</a><a>Products &amp; Pricing</a><a>Financial Health</a><a>Statements</a><hr><small>Tools</small><a>Quote Builder</a></nav>
+<main><header><h1>Overview</h1><span class="sel">June 2026 · FY 26-27</span><span class="tg"><b></b>vs May 2026</span></header>
+<div class="bd">
+<div><div class="vd">June made ₹13.3 L net profit, <em>₹62.8 L less than May</em>, because production cost hit ₹250.6/kg, the highest in 13 months.</div>
+<div class="strip"><div><span>Net profit</span><b>₹13.3 L</b><small>May ₹76.1 L</small></div><div><span>Net margin</span><b>4.1%</b><small>May 22.6%</small></div><div><span>Sales</span><b>₹3.23 Cr</b><small class="neg">−4.0%</small></div><div><span>Stock held</span><b>₹8.04 Cr</b><small>2.5 months of sales</small></div></div></div>
+<div class="row">
+<div class="sec" style="flex:0 0 842px"><h2>Production cost rose to ₹250.6/kg, highest in 13 months</h2><p class="q">Profit bridge, May to June. Bars drawn to one scale.</p>
+<div class="br"><span>May net profit</span><div class="t"><i style="left:0;width:456.6px;background:#98a2b3"></i></div><span class="v">₹76.1 L</span></div>
+<div class="br"><span>Selling price <small style="color:var(--s)">₹282.1 → ₹290.4/kg</small></span><div class="t"><i style="left:456.6px;width:55.2px;background:var(--a)"></i></div><span class="v pos">+₹9.2 L</span></div>
+<div class="br"><span>Sales volume <small style="color:var(--s)">1.19 → 1.11 L kg</small></span><div class="t"><i style="left:471.6px;width:40.2px;background:var(--r)"></i></div><span class="v neg">−₹6.7 L</span></div>
+<div class="br"><span><b>Production cost per kg</b></span><div class="t"><i style="left:126px;width:345.6px;background:var(--r)"></i></div><span class="v neg">−₹57.6 L</span></div>
+<div class="br"><span>Overheads</span><div class="t"><i style="left:101.4px;width:24.6px;background:var(--r)"></i></div><span class="v neg">−₹4.1 L</span></div>
+<div class="br"><span>Finance cost</span><div class="t"><i style="left:79.8px;width:21.6px;background:var(--r)"></i></div><span class="v neg">−₹3.6 L</span></div>
+<div class="br tot"><span><b>June net profit</b></span><div class="t"><i style="left:0;width:79.8px;background:var(--i)"></i></div><span class="v">₹13.3 L</span></div></div>
+<div class="sec" style="flex:1"><h2>Needs attention</h2><p class="q">Three things to act on this month.</p>
+<ul class="at"><li><span class="d" style="background:var(--r)"></span><div><b>Fabrication charges up ₹9.6 L</b><br><a class="lk">See costs</a></div></li>
+<li><span class="d" style="background:var(--r)"></span><div><b>22 of 119 products sold below cost</b> (−₹5.9 L)<br><a class="lk">See products</a></div></li>
+<li><span class="d" style="background:var(--am)"></span><div><b>Stock still ₹8.04 Cr</b><br><a class="lk">See inventory</a></div></li></ul></div></div>
+<div class="sec"><h2>Cash is tied up in stock</h2><p class="q">June against PriyaFil's own last 12 months.</p>
+<table><tr><th>Measure</th><th class="n">June</th><th class="n">12-month avg</th><th>Status</th><th>Note</th></tr>
+<tr><td>Net margin</td><td class="n"><b>4.1%</b></td><td class="n">6.2%</td><td><span class="st ok">Within usual range</span></td><td></td></tr>
+<tr><td>Cash cycle</td><td class="n"><b>142 days</b></td><td class="n">131 days</td><td><span class="st w">Above usual range</span></td><td style="color:var(--s)">June balance sheet not uploaded, showing May</td></tr>
+<tr><td>Stock cover</td><td class="n"><b>2.5 months</b></td><td class="n">—</td><td><span class="st w">Above usual range</span></td><td style="color:var(--s)">₹8.04 Cr in stock</td></tr>
+<tr><td>Debt to equity</td><td class="n"><b>4.0</b></td><td class="n">—</td><td><span class="st ok">Within usual range</span></td><td></td></tr></table></div>
+</div></main></section>
+
+<!-- SCREEN 2: PROFIT & MARGIN -->
+<section class="scr"><nav><div class="mk"><i>P</i>PriyaFil</div><a>Overview</a><a class="on">Profit &amp; Margin</a><a>Costs</a><a>Inventory &amp; Materials</a><a>Products &amp; Pricing</a><a>Financial Health</a><a>Statements</a><hr><small>Tools</small><a>Quote Builder</a></nav>
+<main><header><h1>Profit &amp; Margin</h1><span class="sel">June 2026 · FY 26-27</span><span class="tg"><b></b>vs May 2026</span></header>
+<div class="bd">
+<div><div class="vd" style="font-size:28px">Every rupee of the drop came from cost per kg: production cost rose ₹51.8/kg to <em>₹250.6/kg, the highest in 13 months</em>, while selling price rose ₹8.3/kg.</div>
+<div class="strip"><div><span>Gross margin</span><b>13.7%</b><small>₹44.3 L</small></div><div><span>EBITDA</span><b>₹21.4 L</b><small>May ₹80.6 L</small></div><div><span>Net margin</span><b>4.1%</b><small>May 22.6%</small></div><div><span>Production cost</span><b class="neg">₹250.6/kg</b><small>May ₹198.8/kg</small></div></div></div>
+<div class="row pmr">
+<div class="sec" style="flex:0 0 520px"><h2>Cost per kg, not price, moved the margin</h2><p class="q">Per-kg economics.</p>
+<table><tr><th>Per kg</th><th class="n">June</th><th class="n">May</th><th class="n">12-mo avg</th></tr>
+<tr><td>Selling price</td><td class="n"><b>₹290.4</b></td><td class="n">₹282.1</td><td class="n">₹221.1</td></tr>
+<tr><td><b>Production cost</b></td><td class="n neg"><b>₹250.6</b></td><td class="n">₹198.8</td><td class="n">₹188.6</td></tr>
+<tr><td>Gross profit per kg</td><td class="n"><b>₹39.8</b></td><td class="n">₹83.4</td><td class="n">₹32.6</td></tr>
+<tr><td>RM purchase rate</td><td class="n"><b>₹154.2</b></td><td class="n">₹149.2</td><td class="n">—</td></tr>
+<tr><td>Kg sold</td><td class="n"><b>1.11 L</b></td><td class="n">1.19 L</td><td class="n">1.53 L</td></tr></table></div>
+<div class="sec" style="flex:1;min-width:0"><h2>Net margin swung from 22.6% to 4.1% in a month</h2><p class="q">Net margin by month, Jun 2025 to Jun 2026.</p>
+<svg style="width:100%;height:auto;display:block" viewBox="-20 0 660 226" font-family="Manrope" font-size="11.5" fill="#475467"><rect x="20" y="170.0" width="30" height="15.8" fill="#b42318" fill-opacity=".75"/><text x="35" y="218" text-anchor="middle">Jun 25</text><rect x="68" y="170.0" width="30" height="29.5" fill="#b42318" fill-opacity=".75"/><text x="83" y="218" text-anchor="middle">Jul</text><rect x="116" y="9.1" width="30" height="160.9" fill="none" stroke="#98a2b3" stroke-dasharray="4 3"/><text x="131" y="218" text-anchor="middle">Aug</text><rect x="164" y="170.0" width="30" height="7.6" fill="#b42318" fill-opacity=".75"/><text x="179" y="218" text-anchor="middle">Sep</text><rect x="212" y="170.0" width="30" height="15.1" fill="#b42318" fill-opacity=".75"/><text x="227" y="218" text-anchor="middle">Oct</text><rect x="260" y="170.0" width="30" height="1.0" fill="#b42318" fill-opacity=".75"/><text x="275" y="218" text-anchor="middle">Nov</text><rect x="308" y="170.0" width="30" height="23.8" fill="#b42318" fill-opacity=".75"/><text x="323" y="218" text-anchor="middle">Dec</text><rect x="356" y="154.9" width="30" height="15.1" fill="#98a2b3"/><text x="371" y="218" text-anchor="middle">Jan 26</text><rect x="404" y="152.7" width="30" height="17.3" fill="#98a2b3"/><text x="419" y="218" text-anchor="middle">Feb</text><rect x="452" y="138.3" width="30" height="31.7" fill="#98a2b3"/><text x="467" y="218" text-anchor="middle">Mar</text><rect x="500" y="114.6" width="30" height="55.4" fill="#98a2b3"/><text x="515" y="218" text-anchor="middle">Apr</text><rect x="548" y="88.6" width="30" height="81.4" fill="#98a2b3"/><text x="563" y="218" text-anchor="middle">May</text><rect x="596" y="155.2" width="30" height="14.8" fill="#0e6e6e"/><text x="611" y="218" text-anchor="middle">Jun</text><line x1="10" x2="636" y1="170" y2="170" stroke="#475467"/><text x="6" y="174" text-anchor="end">0%</text><text x="131" y="24" text-anchor="middle" font-weight="700" fill="#475467">44.7%</text><text x="152" y="40">stock revaluation, outlier</text><text x="563" y="82" text-anchor="middle" font-weight="700" fill="#101828">22.6%</text><text x="611" y="149" text-anchor="middle" font-weight="700" fill="#0e6e6e">4.1%</text><text x="356" y="120">turns positive Jan 26</text></svg></div></div>
+<div class="sec" style="padding:14px 22px"><h2>Profit and loss</h2>
+<table class="tt"><tr><th>Line</th><th class="n">June 2026</th><th class="n">May 2026</th><th class="n">Change</th><th class="n">June 2025</th><th class="n">% of sales</th></tr>
+<tr><td>Sales</td><td class="n"><b>₹3.23 Cr</b></td><td class="n">₹3.36 Cr</td><td class="n neg">−4.0%</td><td class="n">₹3.88 Cr</td><td class="n">100%</td></tr>
+<tr><td>Gross profit</td><td class="n"><b>₹44.3 L</b></td><td class="n">₹99.4 L</td><td class="n neg">−₹55.1 L</td><td class="n">₹17.2 L</td><td class="n">13.7%</td></tr>
+<tr><td>Overheads <small style="color:var(--s)">salaries, admin, selling</small></td><td class="n"><b>₹24.2 L</b></td><td class="n">₹20.1 L</td><td class="n neg">+₹4.1 L</td><td class="n">₹24.5 L</td><td class="n">7.5%</td></tr>
+<tr><td>EBITDA</td><td class="n"><b>₹21.4 L</b></td><td class="n">₹80.6 L</td><td class="n neg">−₹59.2 L</td><td class="n">−₹6.0 L</td><td class="n">6.6%</td></tr>
+<tr><td>Finance cost</td><td class="n"><b>₹6.8 L</b></td><td class="n">₹3.2 L</td><td class="n neg">+₹3.6 L</td><td class="n">₹9.7 L</td><td class="n">2.1%</td></tr>
+<tr><td><b>Net profit</b></td><td class="n"><b>₹13.3 L</b></td><td class="n">₹76.1 L</td><td class="n neg"><b>−₹62.8 L</b></td><td class="n">−₹17.0 L</td><td class="n"><b>4.1%</b></td></tr></table></div>
+</div></main></section>
+
+<!-- SCREEN 3: COSTS -->
+<section class="scr"><nav><div class="mk"><i>P</i>PriyaFil</div><a>Overview</a><a>Profit &amp; Margin</a><a class="on">Costs</a><a>Inventory &amp; Materials</a><a>Products &amp; Pricing</a><a>Financial Health</a><a>Statements</a><hr><small>Tools</small><a>Quote Builder</a></nav>
+<main><header><h1>Costs</h1><span class="sel">June 2026 · FY 26-27</span><span class="tg"><b></b>vs May 2026</span></header>
+<div class="bd">
+<div><div class="vd">June spent ₹1.26 Cr, 39% of sales, and fabrication alone took <em>₹9.6 L more</em> than May.</div>
+<div class="strip"><div><span>Total expenses</span><b>₹1.26 Cr</b><small>39% of sales</small></div><div><span>Variable &amp; direct</span><b>₹94.9 L</b></div><div><span>Fixed</span><b>₹29.8 L</b></div><div><span>Other</span><b>₹1.0 L</b></div></div></div>
+<div class="sec"><h2>Fabrication charges drove the rise, now 17.1% of sales</h2><p class="q">Biggest changes vs May, largest first. Bar centred on zero; right is more spend.</p>
+<table><tr><th>Line</th><th class="n">June</th><th class="n">May</th><th class="n">Change</th><th style="text-align:center">Change vs May</th><th class="n">% of sales</th></tr>
+<tr><td><b>Fabrication charges</b></td><td class="n"><b>₹55.2 L</b></td><td class="n">₹45.6 L</td><td class="n neg">+₹9.6 L</td><td><div class="zb"><i style="left:65px;width:60px;background:var(--r)"></i></div></td><td class="n">17.1%</td></tr>
+<tr><td>Employees welfare</td><td class="n">₹10.3 L</td><td class="n">₹6.2 L</td><td class="n neg">+₹4.1 L</td><td><div class="zb"><i style="left:65px;width:26px;background:var(--r)"></i></div></td><td class="n">3.2%</td></tr>
+<tr><td>Yarn processing charges</td><td class="n">₹7.9 L</td><td class="n">₹4.2 L</td><td class="n neg">+₹3.7 L</td><td><div class="zb"><i style="left:65px;width:23px;background:var(--r)"></i></div></td><td class="n">2.4%</td></tr>
+<tr><td>Interest on deposits</td><td class="n">₹4.4 L</td><td class="n">₹0.8 L</td><td class="n neg">+₹3.6 L</td><td><div class="zb"><i style="left:65px;width:22.5px;background:var(--r)"></i></div></td><td class="n">1.4%</td></tr>
+<tr><td>Admin expenses</td><td class="n">₹4.7 L</td><td class="n">₹3.4 L</td><td class="n neg">+₹1.3 L</td><td><div class="zb"><i style="left:65px;width:8px;background:var(--r)"></i></div></td><td class="n">1.5%</td></tr>
+<tr><td>Selling expenses</td><td class="n">₹0.2 L</td><td class="n">₹1.2 L</td><td class="n pos">−₹1.0 L</td><td><div class="zb"><i style="left:59px;width:6px;background:var(--a)"></i></div></td><td class="n">0.1%</td></tr>
+<tr><td>Freight inwards</td><td class="n">₹0.9 L</td><td class="n">₹0.1 L</td><td class="n neg">+₹0.7 L</td><td><div class="zb"><i style="left:65px;width:4.4px;background:var(--r)"></i></div></td><td class="n">0.3%</td></tr>
+<tr><td>Power</td><td class="n">₹6.5 L</td><td class="n">₹5.8 L</td><td class="n neg">+₹0.7 L</td><td><div class="zb"><i style="left:65px;width:4.4px;background:var(--r)"></i></div></td><td class="n">2.0%</td></tr>
+<tr><td>Wages (yarn)</td><td class="n">₹7.2 L</td><td class="n">₹7.9 L</td><td class="n pos">−₹0.7 L</td><td><div class="zb"><i style="left:60.6px;width:4.4px;background:var(--a)"></i></div></td><td class="n">2.2%</td></tr></table></div>
+</div></main></section>
+
+<!-- SCREEN 4: PRODUCTS -->
+<section class="scr"><nav><div class="mk"><i>P</i>PriyaFil</div><a>Overview</a><a>Profit &amp; Margin</a><a>Costs</a><a>Inventory &amp; Materials</a><a class="on">Products &amp; Pricing</a><a>Financial Health</a><a>Statements</a><hr><small>Tools</small><a>Quote Builder</a></nav>
+<main><header><h1>Products &amp; Pricing</h1><span class="sel">June 2026 · FY 26-27</span><span class="tg"><b></b>vs May 2026</span></header>
+<div class="bd">
+<div><div class="vd">119 products earned ₹15.5 L contribution, but <em>22 sold below cost</em>.</div>
+<div class="strip"><div><span>Products sold</span><b>119</b></div><div><span>Contribution</span><b>₹15.5 L</b><small>on ₹2.81 Cr revenue</small></div><div><span>Sold below cost</span><b class="neg">22</b><small>24,667 kg</small></div><div><span>Loss on those</span><b class="neg">−₹5.9 L</b></div></div></div>
+<div class="sec"><h2>22 of 119 products sold below cost, losing ₹5.9 L</h2><p class="q">Five worst by total loss. Each needs a new price.</p>
+<table><tr><th>Product</th><th class="n">Kg sold</th><th class="n">Contribution / kg</th><th class="n">Total</th><th>Status</th><th></th></tr>
+<tr><td><b>20MESH MQ 42" Black</b></td><td class="n">2,941</td><td class="n neg">−₹65.2</td><td class="n neg"><b>−₹1.92 L</b></td><td><span class="st bad">Below cost</span></td><td class="n"><span class="btn">Reprice in Quote Builder</span></td></tr>
+<tr><td><b>Lotus 54" Blue</b></td><td class="n">8,266</td><td class="n neg">−₹17.4</td><td class="n neg"><b>−₹1.44 L</b></td><td><span class="st bad">Below cost</span></td><td class="n"><span class="btn">Reprice in Quote Builder</span></td></tr>
+<tr><td><b>20MESH MQ 42" RP Blue</b></td><td class="n">1,335</td><td class="n neg">−₹46.1</td><td class="n neg"><b>−₹0.62 L</b></td><td><span class="st bad">Below cost</span></td><td class="n"><span class="btn">Reprice in Quote Builder</span></td></tr>
+<tr><td><b>24MESH MQ 84" Orange</b></td><td class="n">1,445</td><td class="n neg">−₹23.4</td><td class="n neg"><b>−₹0.34 L</b></td><td><span class="st bad">Below cost</span></td><td class="n"><span class="btn">Reprice in Quote Builder</span></td></tr>
+<tr><td><b>24MESH MQ 84" Lemon Yellow</b></td><td class="n">1,495</td><td class="n neg">−₹19.8</td><td class="n neg"><b>−₹0.30 L</b></td><td><span class="st bad">Below cost</span></td><td class="n"><span class="btn">Reprice in Quote Builder</span></td></tr></table></div>
+<div class="sec"><h2>Five products earn the most per kg</h2><p class="q">Best earners by total contribution. <a class="lk" style="float:right">View all 119 products →</a></p>
+<table><tr><th>Product</th><th class="n">Kg sold</th><th class="n">Contribution / kg</th><th class="n">Total</th><th>Status</th></tr>
+<tr><td>60MESH HQ 42" White</td><td class="n">992</td><td class="n pos">+₹169.5</td><td class="n pos"><b>+₹1.68 L</b></td><td><span class="st ok">Earning</span></td></tr>
+<tr><td>40MESH HQ 42" White</td><td class="n">990</td><td class="n pos">+₹103.0</td><td class="n pos"><b>+₹1.02 L</b></td><td><span class="st ok">Earning</span></td></tr>
+<tr><td>Kangaroo 84" White</td><td class="n">1,627</td><td class="n pos">+₹60.6</td><td class="n pos"><b>+₹0.99 L</b></td><td><span class="st ok">Earning</span></td></tr>
+<tr><td>24MESH LQ 42" Black</td><td class="n">1,809</td><td class="n pos">+₹47.8</td><td class="n pos"><b>+₹0.87 L</b></td><td><span class="st ok">Earning</span></td></tr>
+<tr><td>20MESH MQ 120" SF Blue</td><td class="n">3,461</td><td class="n pos">+₹23.4</td><td class="n pos"><b>+₹0.81 L</b></td><td><span class="st ok">Earning</span></td></tr></table></div>
+</div></main></section>
+
+<!-- SCREEN 5: FINANCIAL HEALTH -->
+<section class="scr"><nav><div class="mk"><i>P</i>PriyaFil</div><a>Overview</a><a>Profit &amp; Margin</a><a>Costs</a><a>Inventory &amp; Materials</a><a>Products &amp; Pricing</a><a class="on">Financial Health</a><a>Statements</a><hr><small>Tools</small><a>Quote Builder</a></nav>
+<main><header><h1>Financial Health</h1><span class="sel">June 2026 · FY 26-27</span><span class="tg"><b></b>vs May 2026</span></header>
+<div class="bd">
+<div class="bn">Latest balance sheet: May 2026 · June not uploaded<span class="btn">Upload June balance sheet</span></div>
+<div><div class="vd">Liquidity is the <em>thinnest it has been in a year</em>; interest cover is the strongest.</div>
+<div class="strip"><div><span>Current ratio</span><b class="neg">6.3</b><small>lowest in 12 months</small></div><div><span>Quick ratio</span><b class="neg">1.7</b><small>lowest in 12 months</small></div><div><span>Interest coverage</span><b class="pos">23.2×</b><small>highest in 12 months</small></div><div><span>Cash cycle</span><b>142 days</b><small>typical 131–200</small></div></div></div>
+<div class="sec"><h2>Eight measures against the last 12 months</h2><p class="q">May 2026 values. Grey bar is the Jun 2025–Apr 2026 range; the mark is May.</p>
+<table><tr><th>Measure</th><th class="n">May 2026</th><th>12-month range</th><th></th><th>Status</th><th>What it means</th></tr>
+<tr><td><b>Cash cycle</b></td><td class="n"><b>142 days</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:9.7%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">106–476</td><td><span class="st ok">Within usual range</span></td><td class="df">Days between paying for raw material and collecting from customers</td></tr><tr><td><b>Days inventory</b></td><td class="n"><b>118 days</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:11.1%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">77–445</td><td><span class="st ok">Within usual range</span></td><td class="df">Days of production cost sitting in stock</td></tr><tr><td><b>Days receivable</b></td><td class="n"><b>34 days</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:43.8%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">20–52</td><td><span class="st ok">Within usual range</span></td><td class="df">Days customers take to pay</td></tr><tr><td><b>Days payable</b></td><td class="n"><b>9.6 days</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:36.7%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">3–21</td><td><span class="st ok">Within usual range</span></td><td class="df">Days PriyaFil takes to pay suppliers</td></tr><tr><td><b>Current ratio</b></td><td class="n"><b>6.3</b></td><td><div class="rb"><i style="left:1.6%;width:98.4%"></i><b style="left:0%;background:var(--r)"></b></div></td><td style="color:var(--s);font-size:12.5px">6.6–24.5</td><td><span class="st bad">Lowest in 12 months</span></td><td class="df">Current assets for every rupee of current liabilities</td></tr><tr><td><b>Quick ratio</b></td><td class="n"><b>1.7</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:0%;background:var(--r)"></b></div></td><td style="color:var(--s);font-size:12.5px">1.7–3.5</td><td><span class="st bad">Lowest in 12 months</span></td><td class="df">Same, without counting stock</td></tr><tr><td><b>Debt to equity</b></td><td class="n"><b>4.0</b></td><td><div class="rb"><i style="left:0%;width:100%"></i><b style="left:53.8%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">3.3–4.6</td><td><span class="st ok">Within usual range</span></td><td class="df">Borrowings for every rupee of owners' money</td></tr><tr><td><b>Interest coverage</b></td><td class="n"><b>23.2×</b></td><td><div class="rb"><i style="left:0%;width:96.6%"></i><b style="left:100%;background:var(--a)"></b></div></td><td style="color:var(--s);font-size:12.5px">−3.5 to 22.6</td><td><span class="st ok">Highest in 12 months</span></td><td class="df">Times operating profit covers interest cost</td></tr></table></div>
+</div></main></section>
+</body></html>

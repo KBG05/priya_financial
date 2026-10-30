@@ -101,8 +101,10 @@ export function QuoteBuilderPage({ fy }: Props) {
     const [skuSearch, setSkuSearch] = useState("");
     const [skuOpen, setSkuOpen] = useState(false);
     const [skuHighlight, setSkuHighlight] = useState(0);
-    const [selectedCode, setSelectedCode] = useState<number | null>(null);
-    const [inStockOnly, setInStockOnly] = useState(true);
+    // A product can arrive pre-selected from a link, e.g. #/quote?sku=504 from Products & Pricing.
+    const linkedSku = Number(new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("sku")) || null;
+    const [selectedCode, setSelectedCode] = useState<number | null>(linkedSku);
+    const [inStockOnly, setInStockOnly] = useState(linkedSku == null);
 
     const [sku, setSku] = useState<QuoteBuilderSku | null>(null);
     const [stock, setStock] = useState<QuoteBuilderStockRow[]>([]);
@@ -343,7 +345,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                         {/* ── Auto-filled SKU info ── */}
                         <Card className="card-elevated py-0 gap-0">
                             <CardHeader className="py-3 px-4">
-                                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                <CardTitle className="text-xs font-semibold text-muted-foreground">
                                     SKU — {sku.code}
                                 </CardTitle>
                             </CardHeader>
@@ -360,9 +362,9 @@ export function QuoteBuilderPage({ fy }: Props) {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
+                                            <span className="text-[12px] font-semibold text-muted-foreground">Stock in hand</span>
                                             {stock.length > 0 && (
-                                                <span className="text-[10px] text-muted-foreground">
+                                                <span className="text-[12px] text-muted-foreground">
                                                     as of {stock[0].as_of_date}
                                                 </span>
                                             )}
@@ -373,7 +375,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                             <div className="rounded-md border border-border/50 overflow-hidden">
                                                 <table className="w-full text-xs">
                                                     <thead>
-                                                        <tr className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                        <tr className="bg-muted/40 text-[12px] text-muted-foreground">
                                                             <th className="text-left font-semibold px-2.5 py-1.5">Unit</th>
                                                             <th className="text-right font-semibold px-2.5 py-1.5">Bales</th>
                                                             <th className="text-right font-semibold px-2.5 py-1.5">Kg</th>
@@ -403,9 +405,9 @@ export function QuoteBuilderPage({ fy }: Props) {
                                     <div className="flex flex-col gap-3 sm:border-l sm:border-border/30 sm:pl-4">
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mfg cost breakdown</span>
+                                                <span className="text-[12px] font-semibold text-muted-foreground">Mfg cost breakdown</span>
                                                 {sku.month && (
-                                                    <span className="text-[10px] text-muted-foreground">basis: {sku.month}</span>
+                                                    <span className="text-[12px] text-muted-foreground">basis: {sku.month}</span>
                                                 )}
                                             </div>
                                             <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
@@ -420,7 +422,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                         </div>
 
                                         <div>
-                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Historical benchmarks</span>
+                                            <span className="text-[12px] font-semibold text-muted-foreground">Historical benchmarks</span>
                                             <div className="flex flex-col gap-1.5 mt-1.5">
                                                 <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
                                                 <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
@@ -438,7 +440,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                         {/* ── Deal terms ── */}
                         <Card className="card-elevated py-0 gap-0">
                             <CardHeader className="py-3 px-4">
-                                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                <CardTitle className="text-xs font-semibold text-muted-foreground">
                                     Quote Terms
                                 </CardTitle>
                             </CardHeader>
@@ -457,7 +459,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                 <Field label="Rate per Mt (₹/Metre)">
                                     <Input type="number" step="0.05" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
                                     {ratePerKgHint > 0 && (
-                                        <span className="text-[11px] text-muted-foreground">
+                                        <span className="text-[12.5px] text-muted-foreground">
                                             (≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt)
                                         </span>
                                     )}
@@ -473,7 +475,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                                 <Field label="Proposed Quantity (Kgs)">
                                     <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-9 text-sm" />
                                     {qty > 0 && (
-                                        <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-warning"}`}>
+                                        <span className={`flex items-center gap-1.5 text-[12.5px] ${stockCovers ? "text-primary" : "text-warning"}`}>
                                             {stockCovers ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                                             {stockTotalKg <= 0
                                                 ? "No stock on hand — this quantity will need fresh production."
@@ -497,13 +499,13 @@ export function QuoteBuilderPage({ fy }: Props) {
                                             className="h-9 text-sm"
                                         />
                                         {vcOverride !== null && (
-                                            <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px]" onClick={() => setVcOverride(null)}>
+                                            <Button variant="outline" size="sm" className="h-9 px-2.5 text-[12.5px]" onClick={() => setVcOverride(null)}>
                                                 Use live
                                             </Button>
                                         )}
                                     </div>
                                     {vcOverride === null && sourcing === "Produce in-house" && !hasCostData && (
-                                        <span className="text-[11px] text-warning">
+                                        <span className="text-[12.5px] text-warning">
                                             No live Mfg Cost for this SKU — showing 0 until you enter an override.
                                         </span>
                                     )}
@@ -516,7 +518,7 @@ export function QuoteBuilderPage({ fy }: Props) {
                     {/* ── Deal verdict — the payoff of the calculator, given full-width presence ── */}
                     <Card className="card-elevated py-0 gap-0 overflow-hidden">
                         <CardHeader className="py-3 px-4">
-                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground">
                                 Deal Verdict
                             </CardTitle>
                         </CardHeader>
@@ -567,7 +569,7 @@ export function QuoteBuilderPage({ fy }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <label className="flex items-center gap-3">
-            <span className="w-36 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground leading-snug">{label}</span>
+            <span className="w-36 shrink-0 text-[12px] font-semibold text-muted-foreground leading-snug">{label}</span>
             <div className="flex-1 min-w-0 flex flex-col gap-1">{children}</div>
         </label>
     );
@@ -588,7 +590,7 @@ function Row({ label, value, emphasize, negative, muted }: { label: string; valu
 function StatTile({ label, value, negative, muted, lead }: { label: string; value: string; negative?: boolean; muted?: boolean; lead?: boolean }) {
     return (
         <div className={`bg-card px-4 py-3.5 flex flex-col justify-between gap-1.5 min-w-0 ${lead ? "bg-primary/[0.05]" : ""}`}>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">{label}</span>
+            <span className="text-[12px] font-semibold text-muted-foreground truncate">{label}</span>
             <span className={`font-display font-semibold tabular-nums truncate ${lead ? "text-xl" : "text-base"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : lead ? "text-primary" : "text-foreground"}`}>
                 {value}
             </span>

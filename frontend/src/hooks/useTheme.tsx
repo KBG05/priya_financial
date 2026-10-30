@@ -7,11 +7,11 @@ interface ThemeCtx {
     setTheme: (t: Theme) => void;
 }
 
-const ThemeContext = createContext<ThemeCtx>({ theme: "dark", setTheme: () => { } });
+const ThemeContext = createContext<ThemeCtx>({ theme: "light", setTheme: () => { } });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>(() => {
-        return (localStorage.getItem("mis-theme") as Theme) ?? "dark";
+        return (localStorage.getItem("mis-theme") as Theme) ?? "light";
     });
 
     const setTheme = (t: Theme) => {

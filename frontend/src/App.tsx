@@ -1,190 +1,217 @@
-import { useEffect, useState } from "react";
-import { FilterBar } from "@/components/FilterBar";
+import { useEffect, useMemo, useState } from "react";
+import {
+  LayoutDashboard, TrendingUp, Receipt, Package, Tags, Activity, FileSpreadsheet, Calculator,
+} from "lucide-react";
 import { TopBarRight } from "@/components/TopBarRight";
 import { ThemeProvider } from "@/hooks/useTheme";
-import { Pal1Page } from "@/pages/Pal1Page";
-import { MtyPage } from "@/pages/MtyPage";
-import { ConsumptionPage } from "@/pages/ConsumptionPage";
-import { KpisPage } from "@/pages/KpisPage";
-import { DirectExpensesPage } from "@/pages/DirectExpensesPage";
-import { ContributionPage } from "@/pages/ContributionPage";
-import { QuoteBuilderPage } from "@/pages/QuoteBuilderPage";
+import { useRoute, type PageId } from "@/hooks/useRoute";
+import { useReview } from "@/hooks/useReview";
 import { api } from "@/api";
-import { periodLabel } from "@/lib/periodLabel";
-import type { ViewMode } from "@/types";
-import {
-  BarChart3, TrendingUp, Package, Target, Receipt, DollarSign, Calculator
-} from "lucide-react";
+import { MONTH_ORDER, type Month } from "@/types";
+import { fyLabel, label, sameMonthLastYear, previous, type Period } from "@/lib/period";
+import { ErrorPanel, PageSkeleton, EmptyMonth } from "@/components/review/parts";
+import { OverviewPage } from "@/pages/OverviewPage";
+import { ProfitPage } from "@/pages/ProfitPage";
+import { CostsPage } from "@/pages/CostsPage";
+import { InventoryPage } from "@/pages/InventoryPage";
+import { ProductsPage } from "@/pages/ProductsPage";
+import { HealthPage } from "@/pages/HealthPage";
+import { StatementsPage } from "@/pages/StatementsPage";
+import { QuoteBuilderPage } from "@/pages/QuoteBuilderPage";
 import { cn } from "@/lib/utils";
 
-export type TabId = "pal1" | "mty" | "consumption" | "kpis" | "direct_expenses" | "contribution" | "quote_builder";
-
-const NAV_ITEMS: { id: TabId; label: string; blurb: string; icon: React.ElementType }[] = [
-  { id: "pal1",             label: "PAL-1",           blurb: "Profit & loss statement",        icon: BarChart3 },
-  { id: "mty",              label: "MTY",              blurb: "Month-to-year financial rollup", icon: TrendingUp },
-  { id: "consumption",      label: "Consumption",      blurb: "Raw material movement & stock",  icon: Package },
-  { id: "contribution",     label: "Contribution",     blurb: "Per-product margin analysis",    icon: DollarSign },
-  { id: "quote_builder",    label: "Quote Builder",    blurb: "Price a single deal",             icon: Calculator },
-  { id: "direct_expenses",  label: "Direct Expenses",  blurb: "Cost centre breakdown",           icon: Receipt },
-  { id: "kpis",             label: "KPI Scorecard",    blurb: "Ratios & performance signals",    icon: Target },
+const NAV: { id: PageId; label: string; icon: React.ElementType }[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "profit", label: "Profit & Margin", icon: TrendingUp },
+  { id: "costs", label: "Costs", icon: Receipt },
+  { id: "inventory", label: "Inventory & Materials", icon: Package },
+  { id: "products", label: "Products & Pricing", icon: Tags },
+  { id: "health", label: "Financial Health", icon: Activity },
+  { id: "statements", label: "Statements", icon: FileSpreadsheet },
 ];
+const TOOLS: typeof NAV = [{ id: "quote", label: "Quote Builder", icon: Calculator }];
+const TITLES: Record<PageId, string> = Object.fromEntries([...NAV, ...TOOLS].map(n => [n.id, n.label])) as Record<PageId, string>;
+
+/** Months that actually hold figures, per FY (a month with zero sales is treated as not uploaded). */
+async function loadCalendar(): Promise<{ fys: string[]; withData: Record<string, Month[]> }> {
+  const { fy_list, default: def } = await api.fyList();
+  const fys = (fy_list.length ? fy_list : [def]).slice().sort();
+  const withData: Record<string, Month[]> = {};
+  await Promise.all(fys.map(async fy => {
+    const { data } = await api.mty([...MONTH_ORDER], fy);
+    withData[fy] = MONTH_ORDER.filter(m => (data as { month: string; line_item: string; value: number | null }[]).some(r => r.month === m && r.line_item === "TOTAL SALES->" && (r.value ?? 0) > 0));
+  }));
+  return { fys, withData };
+}
 
 function Dashboard() {
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
-  const [availableFYs, setAvailableFYs] = useState<string[]>([]);
-  const [fy, setFy] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<TabId>("pal1");
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
-  const [months, setMonths] = useState<string[]>([]);
-  const [prevMonths, setPrevMonths] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Load available FYs first, then load months for the default FY
-  useEffect(() => {
-    api.fyList().then(({ fy_list, default: defaultFy }) => {
-      setAvailableFYs(fy_list.length ? fy_list : [defaultFy]);
-      setFy(defaultFy);
-    });
-  }, []);
+  const { route, navigate } = useRoute();
+  const [calendar, setCalendar] = useState<{ fys: string[]; withData: Record<string, Month[]> } | null>(null);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [calendarAttempt, setCalendarAttempt] = useState(0);
 
   useEffect(() => {
-    if (!fy) return;
-    setLoading(true);
-    api.months(fy).then(({ months: m, latest_with_data }) => {
-      setAvailableMonths(m);
-      if (m.length > 0) {
-        const defaultMonth = latest_with_data ?? m[m.length - 1];
-        const idx = m.indexOf(defaultMonth);
-        setMonths([defaultMonth]);
-        setPrevMonths(idx > 0 ? [m[idx - 1]] : []);
-      }
-      setLoading(false);
-    });
-  }, [fy]);
+    setCalendarError(null);
+    loadCalendar().then(setCalendar).catch(e => setCalendarError(e instanceof Error ? e.message : String(e)));
+  }, [calendarAttempt]);
 
-  useEffect(() => {
-    if (viewMode === "single" && months.length === 1) {
-      const idx = availableMonths.indexOf(months[0]);
-      setPrevMonths(idx > 0 ? [availableMonths[idx - 1]] : []);
+  // The latest month with figures is the default period.
+  const latest: Period | null = useMemo(() => {
+    if (!calendar) return null;
+    for (const fy of [...calendar.fys].reverse()) {
+      const ms = calendar.withData[fy];
+      if (ms?.length) return { fy, month: ms[ms.length - 1] };
     }
-  }, [months, viewMode, availableMonths]);
+    return null;
+  }, [calendar]);
 
-  const active = NAV_ITEMS.find(n => n.id === activeTab)!;
+  const period: Period | null = route.fy && route.month ? { fy: route.fy, month: route.month } : latest;
+  const hasData = !!(period && calendar?.withData[period.fy]?.includes(period.month));
+  const review = useReview(hasData ? period : null, calendar?.fys ?? []);
+  const isQuote = route.page === "quote";
 
-  if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 rounded-lg bg-primary animate-pulse" />
-        <p className="text-sm text-muted-foreground">Loading MIS data…</p>
+  const go = (page: PageId) => navigate({ page });
+
+  let body: React.ReactNode;
+  if (calendarError) body = <ErrorPanel message={calendarError} onRetry={() => setCalendarAttempt(a => a + 1)} />;
+  else if (isQuote) body = <QuoteBuilderPage fy={period?.fy ?? calendar?.fys.at(-1) ?? ""} />;
+  else if (!calendar || !period) body = <PageSkeleton />;
+  else if (!hasData) body = <EmptyMonth month={label(period)} />;
+  else if (review.status === "error" && !review.review) body = <ErrorPanel message={review.error} onRetry={review.retry} />;
+  else if (!review.review || review.review.cur.period.month !== period.month || review.review.cur.period.fy !== period.fy) body = <PageSkeleton />;
+  else {
+    const props = { review: review.review, compare: route.compare, go };
+    body = (
+      <div key={`${route.page}:${period.fy}:${period.month}:${route.compare}`} className="flex flex-col gap-6">
+        {route.page === "overview" && <OverviewPage {...props} />}
+        {route.page === "profit" && <ProfitPage {...props} />}
+        {route.page === "costs" && <CostsPage {...props} />}
+        {route.page === "inventory" && <InventoryPage {...props} />}
+        {route.page === "products" && <ProductsPage {...props} />}
+        {route.page === "health" && <HealthPage {...props} />}
+        {route.page === "statements" && <StatementsPage {...props} />}
       </div>
-    </div>
-  );
+    );
+  }
+
+  const NavLink = ({ id, label: text, icon: Icon, compact }: { id: PageId; label: string; icon: React.ElementType; compact?: boolean }) => {
+    const active = route.page === id;
+    return (
+      <a
+        href={`#/${id}${window.location.hash.includes("?") ? "?" + window.location.hash.split("?")[1] : ""}`}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg font-semibold transition-colors whitespace-nowrap",
+          compact ? "px-3 py-1.5 text-[13px]" : "px-3 py-2",
+          active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        <Icon size={17} aria-hidden className="shrink-0" />
+        {text}
+      </a>
+    );
+  };
+
+  const latestLabel = latest ? label(latest) : "—";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Command rail — persistent left navigation, pinned independent of page scroll */}
-      <aside className="hidden md:flex flex-col w-56 shrink-0 h-screen bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border">
-        <div className="flex items-center gap-2.5 h-16 px-5 border-b border-sidebar-border/80">
-          <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-7 w-auto object-contain" />
-          <div className="flex flex-col justify-center min-w-0">
-            <p className="font-display text-sm font-semibold leading-none truncate">Priya Textile</p>
-            <p className="text-[9px] uppercase tracking-widest font-semibold text-sidebar-primary mt-1">Command Center</p>
-          </div>
+    <div className="flex min-h-screen bg-background text-foreground">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-card focus:px-3 focus:py-2 focus:rounded-lg">Skip to content</a>
+
+      <aside className="hidden lg:flex flex-col w-[232px] shrink-0 h-screen sticky top-0 bg-card border-r border-border">
+        <div className="flex items-center gap-2.5 h-[60px] px-5">
+          <img src="/Priyafil-Logo-PNG-Final.png" alt="" className="h-7 w-auto object-contain" />
+          <span className="font-extrabold text-[17px] tracking-[-0.01em]">PriyaFil</span>
         </div>
-
-        <nav className="flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto slim-scrollbar">
-          {NAV_ITEMS.map(({ id, label, blurb, icon: Icon }) => {
-            const isActive = activeTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  "group flex items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <Icon size={16} className={cn("shrink-0 mt-0.5", isActive ? "text-sidebar-primary" : "opacity-70")} />
-                <span className="flex flex-col min-w-0">
-                  <span className="text-[13px] font-semibold leading-tight">{label}</span>
-                  <span className="text-[11px] leading-tight opacity-60 truncate">{blurb}</span>
-                </span>
-              </button>
-            );
-          })}
+        <nav aria-label="Business review" className="flex flex-col gap-0.5 px-3 pt-3">
+          {NAV.map(n => <NavLink key={n.id} {...n} />)}
         </nav>
-
-        <div className="p-3 border-t border-sidebar-border/80">
-          <p className="text-[10px] text-sidebar-foreground/45 leading-relaxed px-1">
-            Data refreshes monthly from Tally &amp; MIS exports.
-          </p>
+        <nav aria-label="Tools" className="flex flex-col gap-0.5 px-3 mt-4 pt-4 border-t border-border mx-3 !px-0">
+          <p className="px-3 pb-1 text-[12.5px] font-semibold text-muted-foreground">Tools</p>
+          {TOOLS.map(n => <NavLink key={n.id} {...n} />)}
+        </nav>
+        <div className="mt-auto px-5 py-4 border-t border-border text-[13px] text-muted-foreground">
+          Latest figures: <span className="font-semibold text-foreground">{latestLabel}</span>
+          <p className="mt-0.5">From the monthly Tally and MIS upload.</p>
         </div>
       </aside>
 
-      {/* Main column — scrolls independently, sidebar stays put */}
-      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-y-auto">
-        {/* Top bar — page identity + global controls */}
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
-          <div className="flex items-center h-12 px-5 gap-4">
-            <div className="flex items-center gap-2.5 min-w-0 md:hidden">
-              <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-6 w-auto object-contain" />
-            </div>
-            <div className="flex items-baseline gap-2 min-w-0">
-              <h1 className="font-display text-base font-semibold leading-tight text-foreground truncate">{active.label}</h1>
-              <p className="text-xs text-muted-foreground truncate hidden sm:block">{active.blurb}</p>
-            </div>
-            <div className="flex-1" />
-            <TopBarRight availableMonths={availableMonths} fy={fy} availableFYs={availableFYs} />
+      <div className="flex flex-col flex-1 min-w-0">
+        <header className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border-b border-border">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-h-[60px] px-4 md:px-8 py-2">
+            <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-6 w-auto object-contain lg:hidden" />
+            <h1 className="text-[15px] font-bold mr-auto">{TITLES[route.page]}</h1>
+            {!isQuote && calendar && period && (
+              <PeriodControls
+                calendar={calendar}
+                period={period}
+                compare={route.compare}
+                onPeriod={p => navigate({ fy: p.fy, month: p.month })}
+                onCompare={c => navigate({ compare: c })}
+              />
+            )}
+            <TopBarRight availableMonths={[...MONTH_ORDER]} fy={period?.fy ?? ""} availableFYs={calendar?.fys ?? []} onUploaded={() => setCalendarAttempt(a => a + 1)} />
           </div>
-
-          {/* Mobile nav — visible only when the rail is hidden */}
-          <nav className="flex md:hidden items-center gap-1 px-5 pb-2 overflow-x-auto no-scrollbar">
-            {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-              const isActive = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors",
-                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Icon size={14} />
-                  {label}
-                </button>
-              );
-            })}
+          <nav aria-label="Business review" className="lg:hidden flex gap-1 px-3 pb-2 overflow-x-auto no-scrollbar">
+            {[...NAV, ...TOOLS].map(n => <NavLink key={n.id} {...n} compact />)}
           </nav>
         </header>
 
-        <main className="px-5 py-3 flex flex-col gap-3 overflow-x-hidden min-w-0">
-          {/* Filters — period (FY/month) shown inline with the fiscal-year label, no separate headline row */}
-          <FilterBar
-            periodLabel={periodLabel(fy, viewMode, months)}
-            availableMonths={availableMonths}
-            availableFYs={availableFYs}
-            fy={fy}
-            viewMode={viewMode}
-            selectedMonths={months}
-            onFyChange={setFy}
-            onViewModeChange={setViewMode}
-            onMonthsChange={setMonths}
-          />
-
-          {/* Page content */}
-          <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
-            {activeTab === "pal1"            && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "mty"             && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "kpis"            && <KpisPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "direct_expenses" && <DirectExpensesPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "contribution"    && <ContributionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
-            {activeTab === "quote_builder"   && <QuoteBuilderPage fy={fy} />}
-          </div>
+        <main id="main" className="flex-1 px-4 md:px-8 py-6 md:py-8 min-w-0 max-w-[1320px] w-full">
+          {body}
         </main>
+      </div>
+    </div>
+  );
+}
+
+function PeriodControls({ calendar, period, compare, onPeriod, onCompare }: {
+  calendar: { fys: string[]; withData: Record<string, Month[]> };
+  period: Period;
+  compare: "prev" | "ly";
+  onPeriod: (p: Period) => void;
+  onCompare: (c: "prev" | "ly") => void;
+}) {
+  const value = `${period.fy}:${period.month}`;
+  const prevP = previous(period);
+  const lyP = sameMonthLastYear(period);
+  const has = (p: Period) => !!calendar.withData[p.fy]?.includes(p.month);
+  const segment = (c: "prev" | "ly", text: string, enabled: boolean) => (
+    <button
+      type="button"
+      onClick={() => onCompare(c)}
+      disabled={!enabled}
+      aria-pressed={compare === c}
+      title={enabled ? undefined : "No figures uploaded for that month"}
+      className={cn(
+        "px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors whitespace-nowrap disabled:opacity-45 disabled:cursor-not-allowed",
+        compare === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {text}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="sr-only" htmlFor="period">Month</label>
+      <select
+        id="period"
+        value={value}
+        onChange={e => { const [fy, month] = e.target.value.split(":"); onPeriod({ fy, month: month as Month }); }}
+        className="h-9 rounded-lg border border-input bg-card px-3 pr-8 font-semibold text-[14px] cursor-pointer"
+      >
+        {[...calendar.fys].reverse().map(fy => (
+          <optgroup key={fy} label={fyLabel(fy)}>
+            {[...(calendar.withData[fy] ?? [])].reverse().map(m => (
+              <option key={m} value={`${fy}:${m}`}>{label({ fy, month: m })} · {fyLabel(fy)}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <div role="group" aria-label="Compare with" className="flex items-center rounded-lg bg-muted p-0.5">
+        {segment("prev", `vs ${label(prevP)}`, has(prevP))}
+        {segment("ly", `vs ${label(lyP)}`, has(lyP))}
       </div>
     </div>
   );

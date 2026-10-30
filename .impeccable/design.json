@@ -1,0 +1,728 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T13:24:16Z",
+  "title": "Design System: PriyaFil MIS",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "PriyaFil Deep Teal",
+        "canonical": "hsl(180 77% 24%)",
+        "hex": "#0e6c6c",
+        "tonalRamp": [
+          "#094444",
+          "#0f7575",
+          "#16a7a7",
+          "#1cd9d9",
+          "#46e7e7",
+          "#78eded",
+          "#aef4f4",
+          "#e8fcfc"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Teal Wash",
+        "canonical": "hsl(180 32% 93%)",
+        "hex": "#e7f3f3",
+        "tonalRamp": [
+          "#1a3232",
+          "#2d5858",
+          "#407d7d",
+          "#53a2a2",
+          "#75b8b8",
+          "#9acbcb",
+          "#c2e0e0",
+          "#eef6f6"
+        ]
+      },
+      "destructive": {
+        "role": "secondary",
+        "displayName": "Loss Red",
+        "canonical": "hsl(4 76% 40%)",
+        "hex": "#b42318",
+        "tonalRamp": [
+          "#430d09",
+          "#751710",
+          "#a62017",
+          "#d72a1d",
+          "#e65247",
+          "#ed8078",
+          "#f4b3ae",
+          "#fceae9"
+        ]
+      },
+      "destructive-soft": {
+        "role": "secondary",
+        "displayName": "Loss Wash",
+        "canonical": "hsl(4 86% 96%)",
+        "hex": "#feedec",
+        "tonalRamp": [
+          "#470a05",
+          "#7b1109",
+          "#af180d",
+          "#e41f11",
+          "#f0493d",
+          "#f47971",
+          "#f9afaa",
+          "#fde9e7"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Watch Amber",
+        "canonical": "hsl(38 87% 31%)",
+        "hex": "#94610a",
+        "tonalRamp": [
+          "#482f05",
+          "#7c5209",
+          "#b0740c",
+          "#e59710",
+          "#f1af3b",
+          "#f5c470",
+          "#f9dca9",
+          "#fdf5e7"
+        ]
+      },
+      "warning-soft": {
+        "role": "tertiary",
+        "displayName": "Watch Wash",
+        "canonical": "hsl(40 80% 94%)",
+        "hex": "#fcf4e3",
+        "tonalRamp": [
+          "#453008",
+          "#77540d",
+          "#aa7813",
+          "#dc9b18",
+          "#eab243",
+          "#f0c775",
+          "#f6ddac",
+          "#fcf6e8"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "hsl(220 14% 97%)",
+        "hex": "#f6f7f8",
+        "tonalRamp": [
+          "#21242c",
+          "#393f4c",
+          "#515a6c",
+          "#69758c",
+          "#8892a5",
+          "#a8afbd",
+          "#cbcfd8",
+          "#f0f2f4"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Panel White",
+        "canonical": "hsl(0 0% 100%)",
+        "hex": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#424242",
+          "#5e5e5e",
+          "#7a7a7a",
+          "#969696",
+          "#b2b2b2",
+          "#d1d1d1",
+          "#f2f2f2"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Ledger Ink",
+        "canonical": "hsl(221 43% 11%)",
+        "hex": "#101828",
+        "tonalRamp": [
+          "#162037",
+          "#26385f",
+          "#364f87",
+          "#4667af",
+          "#6986c3",
+          "#92a6d3",
+          "#bdcae5",
+          "#edf0f8"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Mist",
+        "canonical": "hsl(220 14% 95%)",
+        "hex": "#f0f2f4",
+        "tonalRamp": [
+          "#21242c",
+          "#393f4c",
+          "#515a6c",
+          "#69758c",
+          "#8892a5",
+          "#a8afbd",
+          "#cbcfd8",
+          "#f0f2f4"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Slate Secondary",
+        "canonical": "hsl(217 18% 34%)",
+        "hex": "#475366",
+        "tonalRamp": [
+          "#1f252d",
+          "#36404e",
+          "#4d5a6f",
+          "#647590",
+          "#8492a9",
+          "#a5afc0",
+          "#c9cfd9",
+          "#f0f2f5"
+        ]
+      },
+      "accent": {
+        "role": "neutral",
+        "displayName": "Mist Hover",
+        "canonical": "hsl(220 14% 94%)",
+        "hex": "#eeeff2",
+        "tonalRamp": [
+          "#21242c",
+          "#393f4c",
+          "#515a6c",
+          "#69758c",
+          "#8892a5",
+          "#a8afbd",
+          "#cbcfd8",
+          "#f0f2f4"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "hsl(220 17% 91%)",
+        "hex": "#e4e7ec",
+        "tonalRamp": [
+          "#20242d",
+          "#373f4e",
+          "#4e596e",
+          "#66738f",
+          "#8591a8",
+          "#a5aec0",
+          "#c9ced9",
+          "#f0f2f4"
+        ]
+      },
+      "input": {
+        "role": "neutral",
+        "displayName": "Field Edge",
+        "canonical": "hsl(220 14% 84%)",
+        "hex": "#d0d4dc",
+        "tonalRamp": [
+          "#21242c",
+          "#393f4c",
+          "#515a6c",
+          "#69758c",
+          "#8892a5",
+          "#a8afbd",
+          "#cbcfd8",
+          "#f0f2f4"
+        ]
+      },
+      "primary-foreground": {
+        "role": "primary",
+        "displayName": "On Teal",
+        "canonical": "hsl(0 0% 100%)",
+        "hex": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#424242",
+          "#5e5e5e",
+          "#7a7a7a",
+          "#969696",
+          "#b2b2b2",
+          "#d1d1d1",
+          "#f2f2f2"
+        ]
+      },
+      "dark-primary": {
+        "role": "primary",
+        "displayName": "Deep Teal (dark)",
+        "canonical": "hsl(176 55% 50%)",
+        "hex": "#39c6bc",
+        "tonalRamp": [
+          "#113b38",
+          "#1e6762",
+          "#2a928b",
+          "#37beb5",
+          "#5dd0c8",
+          "#88ddd7",
+          "#b8eae7",
+          "#ebf9f8"
+        ]
+      },
+      "dark-primary-foreground": {
+        "role": "primary",
+        "displayName": "On Teal (dark)",
+        "canonical": "hsl(200 30% 8%)",
+        "hex": "#0e161b",
+        "tonalRamp": [
+          "#1b2a32",
+          "#2e4956",
+          "#42687b",
+          "#56879f",
+          "#77a1b6",
+          "#9cbac9",
+          "#c3d6df",
+          "#eef4f6"
+        ]
+      },
+      "dark-primary-soft": {
+        "role": "primary",
+        "displayName": "Teal Wash (dark)",
+        "canonical": "hsl(176 40% 15%)",
+        "hex": "#173634",
+        "tonalRamp": [
+          "#173634",
+          "#285d59",
+          "#39847f",
+          "#49aba5",
+          "#6dc0bb",
+          "#94d1cd",
+          "#bfe3e1",
+          "#edf7f7"
+        ]
+      },
+      "dark-destructive": {
+        "role": "secondary",
+        "displayName": "Loss Red (dark)",
+        "canonical": "hsl(4 80% 66%)",
+        "hex": "#ee6c63",
+        "tonalRamp": [
+          "#450c08",
+          "#77140d",
+          "#aa1d13",
+          "#dc2618",
+          "#ea4e43",
+          "#f07d75",
+          "#f6b1ac",
+          "#fce9e8"
+        ]
+      },
+      "dark-destructive-soft": {
+        "role": "secondary",
+        "displayName": "Loss Wash (dark)",
+        "canonical": "hsl(4 45% 16%)",
+        "hex": "#3b1916",
+        "tonalRamp": [
+          "#371715",
+          "#602824",
+          "#893a34",
+          "#b14b43",
+          "#c56e67",
+          "#d59590",
+          "#e6bfbc",
+          "#f8eded"
+        ]
+      },
+      "dark-warning": {
+        "role": "tertiary",
+        "displayName": "Watch Amber (dark)",
+        "canonical": "hsl(38 90% 62%)",
+        "hex": "#f5b547",
+        "tonalRamp": [
+          "#492f04",
+          "#7e5207",
+          "#b37509",
+          "#e9980c",
+          "#f5b038",
+          "#f7c56e",
+          "#fadca8",
+          "#fef5e7"
+        ]
+      },
+      "dark-warning-soft": {
+        "role": "tertiary",
+        "displayName": "Watch Wash (dark)",
+        "canonical": "hsl(38 45% 14%)",
+        "hex": "#342814",
+        "tonalRamp": [
+          "#372b15",
+          "#604a24",
+          "#896a34",
+          "#b18943",
+          "#c5a367",
+          "#d5bc90",
+          "#e6d7bc",
+          "#f8f4ed"
+        ]
+      },
+      "dark-background": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "canonical": "hsl(200 18% 7%)",
+        "hex": "#0f1315",
+        "tonalRamp": [
+          "#1f292d",
+          "#36464e",
+          "#4d646f",
+          "#648290",
+          "#849da9",
+          "#a5b7c0",
+          "#c9d4d9",
+          "#f0f3f5"
+        ]
+      },
+      "dark-card": {
+        "role": "neutral",
+        "displayName": "Night Panel",
+        "canonical": "hsl(200 16% 10%)",
+        "hex": "#151b1e",
+        "tonalRamp": [
+          "#20282c",
+          "#38464d",
+          "#4f636d",
+          "#67818e",
+          "#869ca7",
+          "#a6b7bf",
+          "#cad4d8",
+          "#f0f3f4"
+        ]
+      },
+      "dark-foreground": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "hsl(200 15% 92%)",
+        "hex": "#e8ecee",
+        "tonalRamp": [
+          "#21282c",
+          "#38464c",
+          "#50636d",
+          "#68818d",
+          "#879ca6",
+          "#a7b6be",
+          "#cad3d8",
+          "#f0f3f4"
+        ]
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "displayName": "Night Mist",
+        "canonical": "hsl(200 14% 14%)",
+        "hex": "#1f2529",
+        "tonalRamp": [
+          "#21282c",
+          "#39454c",
+          "#51636c",
+          "#69808c",
+          "#889ba5",
+          "#a8b6bd",
+          "#cbd3d8",
+          "#f0f3f4"
+        ]
+      },
+      "dark-muted-foreground": {
+        "role": "neutral",
+        "displayName": "Night Slate",
+        "canonical": "hsl(200 10% 68%)",
+        "hex": "#a5b0b6",
+        "tonalRamp": [
+          "#22282a",
+          "#3c4549",
+          "#556168",
+          "#6e7e87",
+          "#8c9aa1",
+          "#abb5ba",
+          "#cdd3d6",
+          "#f1f3f4"
+        ]
+      },
+      "dark-accent": {
+        "role": "neutral",
+        "displayName": "Night Mist Hover",
+        "canonical": "hsl(200 14% 16%)",
+        "hex": "#232b2f",
+        "tonalRamp": [
+          "#21282c",
+          "#39454c",
+          "#51636c",
+          "#69808c",
+          "#889ba5",
+          "#a8b6bd",
+          "#cbd3d8",
+          "#f0f3f4"
+        ]
+      },
+      "dark-border": {
+        "role": "neutral",
+        "displayName": "Night Hairline",
+        "canonical": "hsl(200 12% 19%)",
+        "hex": "#2b3236",
+        "tonalRamp": [
+          "#22282b",
+          "#3a454a",
+          "#53626a",
+          "#6c7f89",
+          "#8a9ba3",
+          "#a9b6bc",
+          "#ccd3d7",
+          "#f1f3f4"
+        ]
+      },
+      "dark-input": {
+        "role": "neutral",
+        "displayName": "Night Field Edge",
+        "canonical": "hsl(200 12% 26%)",
+        "hex": "#3a454a",
+        "tonalRamp": [
+          "#22282b",
+          "#3a454a",
+          "#53626a",
+          "#6c7f89",
+          "#8a9ba3",
+          "#a9b6bc",
+          "#ccd3d7",
+          "#f1f3f4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "verdict": {
+        "displayName": "Verdict",
+        "purpose": "The page's one argued sentence; 26px below 768px. One per page."
+      },
+      "finding": {
+        "displayName": "Finding",
+        "purpose": "Section heading stating a conclusion generated from the figures; 19px on mobile."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Key values in the ruled figure strip; tabular numerals."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Sentences, table cells, nav (600)."
+      },
+      "secondary": {
+        "displayName": "Secondary",
+        "purpose": "Figure labels and notes, definitions, link buttons, compact controls."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table headers, tags, bridge details, usual-range captions; sentence case, never uppercase."
+      }
+    },
+    "shadows": [
+      {
+        "name": "segment-lift",
+        "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        "purpose": "Selected segment of the compare control only."
+      },
+      {
+        "name": "popover",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "purpose": "Truly floating layers such as listboxes. Panels never cast shadows."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Shared ease-out for every data-change transition."
+      },
+      {
+        "name": "settle",
+        "value": "220ms; opacity 0.35→1, translateY 3px→0",
+        "purpose": "Content that re-renders with the period settles in."
+      },
+      {
+        "name": "bridge-tween",
+        "value": "240ms left/width",
+        "purpose": "Profit bridge bars move to their new to-scale lengths."
+      },
+      {
+        "name": "series-bars",
+        "value": "200ms top/height",
+        "purpose": "Bar series heights ease on change."
+      },
+      {
+        "name": "collapsible",
+        "value": "open 220ms ease-settle; close 180ms cubic-bezier(0.7, 0, 0.84, 0)",
+        "purpose": "Section expand and collapse."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Removes settle and pulse animations and disables bridge transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "StandingTable switches from stacked rows to a table."
+      },
+      {
+        "name": "md",
+        "value": "768px",
+        "purpose": "Larger verdict and finding sizes, wider page and panel padding."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "purpose": "Sidebar appears; figure strip goes to four columns."
+      },
+      {
+        "name": "xl",
+        "value": "1280px",
+        "purpose": "Overview proof and Needs attention sit side by side (2.3fr to 1fr)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Teal action for uploads; the only filled button.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 13v8\"/><path d=\"M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2\"/><path d=\"m8 17 4-4 4 4\"/></svg> Upload balance sheet</button>",
+      "css": ".ds-btn-primary { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:inline-flex; align-items:center; gap:6px; background:hsl(var(--primary, 180 77% 24%)); color:hsl(var(--primary-foreground, 0 0% 100%)); border:none; border-radius:8px; padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer; transition:background-color .15s; } .ds-btn-primary:hover { background:hsl(var(--primary, 180 77% 24%) / 0.9); } .ds-btn-primary:focus-visible { outline:2px solid hsl(var(--primary, 180 77% 24%)); outline-offset:2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined recovery action, e.g. Try again.",
+      "html": "<button class=\"ds-btn-secondary\">Try again</button>",
+      "css": ".ds-btn-secondary { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; background:hsl(var(--card, 0 0% 100%)); color:hsl(var(--foreground, 221 43% 11%)); border:1px solid hsl(var(--input, 220 14% 84%)); border-radius:8px; padding:8px 14px; font-size:14px; font-weight:700; cursor:pointer; transition:background-color .15s; } .ds-btn-secondary:hover { background:hsl(var(--accent, 220 14% 94%)); } .ds-btn-secondary:focus-visible { outline:2px solid hsl(var(--primary, 180 77% 24%)); outline-offset:2px; }"
+    },
+    {
+      "name": "Link Button",
+      "kind": "button",
+      "refersTo": "link-button",
+      "description": "Section action pointing to the page that explains the finding.",
+      "html": "<button class=\"ds-link\">Profit &amp; margin <svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button>",
+      "css": ".ds-link { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:inline-flex; align-items:center; gap:4px; background:transparent; color:hsl(var(--primary, 180 77% 24%)); border:none; border-radius:8px; padding:6px 10px; font-size:13px; font-weight:700; cursor:pointer; transition:background-color .15s; } .ds-link:hover { background:hsl(var(--primary-soft, 180 32% 93%)); } .ds-link:focus-visible { outline:2px solid hsl(var(--primary, 180 77% 24%)); outline-offset:2px; }"
+    },
+    {
+      "name": "Standing Tags",
+      "kind": "chip",
+      "refersTo": "tag-good",
+      "description": "Tone vocabulary: words always ride with colour.",
+      "html": "<div class=\"ds-tags\"><span class=\"ds-tag ds-good\">Below its usual range</span><span class=\"ds-tag ds-bad\">Highest in 12 months</span><span class=\"ds-tag ds-watch\">Near the top of its range</span><span class=\"ds-tag ds-neutral\">Within its usual range</span></div>",
+      "css": ".ds-tags { display:flex; flex-wrap:wrap; gap:8px; } .ds-tag { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:inline-flex; align-items:center; border-radius:6px; padding:2px 8px; font-size:12.5px; font-weight:700; white-space:nowrap; } .ds-good { background:hsl(var(--primary-soft, 180 32% 93%)); color:hsl(var(--primary, 180 77% 24%)); } .ds-bad { background:hsl(var(--destructive-soft, 4 86% 96%)); color:hsl(var(--destructive, 4 76% 40%)); } .ds-watch { background:hsl(var(--warning-soft, 40 80% 94%)); color:hsl(var(--warning, 38 87% 31%)); } .ds-neutral { background:hsl(var(--muted, 220 14% 95%)); color:hsl(var(--muted-foreground, 217 18% 34%)); }"
+    },
+    {
+      "name": "Verdict and Figure Strip",
+      "kind": "custom",
+      "refersTo": "typography.verdict",
+      "description": "One sentence the page argues, over a ruled strip of key figures with deltas.",
+      "html": "<div class=\"ds-verdict\"><h2>June made ₹13.3 L net profit, <span class=\"ds-red\">₹62.8 L less</span> than May.</h2><dl><div><dt>Sales</dt><dd class=\"ds-val\">₹3.23 Cr</dd><dd class=\"ds-d ds-red\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m7 7 10 10\"/><path d=\"M17 7v10H7\"/></svg>−4.0% vs May</dd></div><div><dt>Net margin</dt><dd class=\"ds-val\">4.1%</dd><dd class=\"ds-d ds-red\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m7 7 10 10\"/><path d=\"M17 7v10H7\"/></svg>−18.5 pts vs May</dd></div><div><dt>Selling price</dt><dd class=\"ds-val\">₹290.4/kg</dd><dd class=\"ds-d ds-teal\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 7h10v10\"/><path d=\"M7 17 17 7\"/></svg>+₹8.3/kg vs May</dd></div></dl></div>",
+      "css": ".ds-verdict { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; color:hsl(var(--foreground, 221 43% 11%)); } .ds-verdict h2 { margin:0; font-size:32px; line-height:1.2; font-weight:700; letter-spacing:-0.02em; max-width:64rem; text-wrap:balance; } .ds-verdict dl { margin:20px 0 0; display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid hsl(var(--border, 220 17% 91%)); border-bottom:1px solid hsl(var(--border, 220 17% 91%)); } .ds-verdict dl > div { padding:14px 16px 14px 20px; } .ds-verdict dl > div:first-child { padding-left:0; } .ds-verdict dl > div + div { border-left:1px solid hsl(var(--border, 220 17% 91%)); } .ds-verdict dt { font-size:13px; color:hsl(var(--muted-foreground, 217 18% 34%)); } .ds-verdict dd { margin:0; } .ds-val { margin-top:2px; font-size:22px; font-weight:700; letter-spacing:-0.01em; font-variant-numeric:tabular-nums; line-height:1.25; } .ds-d { margin-top:4px; display:inline-flex; align-items:center; gap:2px; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; } .ds-red { color:hsl(var(--destructive, 4 76% 40%)); } .ds-teal { color:hsl(var(--primary, 180 77% 24%)); }"
+    },
+    {
+      "name": "Section Panel",
+      "kind": "card",
+      "refersTo": "section-panel",
+      "description": "White panel led by a finding heading; the proof sits beneath.",
+      "html": "<section class=\"ds-section\"><div class=\"ds-head\"><div><h3>Production cost per kg rose to ₹250.6/kg, taking ₹57.6 L out of profit.</h3><p>Every step is drawn to the same scale and the steps add up to the total.</p></div><button class=\"ds-link2\">Costs <svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button></div><div class=\"ds-proof\">Proof goes here.</div></section>",
+      "css": ".ds-section { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; background:hsl(var(--card, 0 0% 100%)); color:hsl(var(--foreground, 221 43% 11%)); border:1px solid hsl(var(--border, 220 17% 91%)); border-radius:12px; padding:24px; font-size:14px; line-height:1.5; } .ds-head { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:flex-start; margin-bottom:16px; } .ds-head > div { flex:1 1 18rem; min-width:0; } .ds-head h3 { margin:0; font-size:20px; font-weight:700; letter-spacing:-0.01em; line-height:1.375; text-wrap:balance; } .ds-head p { margin:4px 0 0; color:hsl(var(--muted-foreground, 217 18% 34%)); } .ds-link2 { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:inline-flex; align-items:center; gap:4px; background:none; border:none; color:hsl(var(--primary, 180 77% 24%)); font-weight:700; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; } .ds-link2:hover { background:hsl(var(--primary-soft, 180 32% 93%)); } .ds-proof { color:hsl(var(--muted-foreground, 217 18% 34%)); border-top:1px solid hsl(var(--border, 220 17% 91%)); padding-top:12px; }"
+    },
+    {
+      "name": "Profit Bridge",
+      "kind": "custom",
+      "refersTo": "rounded.bridge",
+      "description": "To-scale waterfall from last month's net profit to this month's; a real table.",
+      "html": "<table class=\"ds-bridge\"><tbody><tr class=\"ds-tot\"><th>May net profit</th><td><div class=\"ds-track\"><i class=\"ds-start\" style=\"left:0;width:80%\"></i></div></td><td class=\"ds-amt\">₹76.1 L</td></tr><tr><th>Selling price<span>₹282.1/kg → ₹290.4/kg</span></th><td><div class=\"ds-track\"><i class=\"ds-up\" style=\"left:80%;width:10%\"></i></div></td><td class=\"ds-amt ds-g\">+₹9.2 L</td></tr><tr><th>Production cost<span>₹198.8/kg → ₹250.6/kg</span></th><td><div class=\"ds-track\"><i class=\"ds-down\" style=\"left:30%;width:60%\"></i></div></td><td class=\"ds-amt ds-r\">−₹57.6 L</td></tr><tr class=\"ds-tot ds-end\"><th>June net profit</th><td><div class=\"ds-track\"><i class=\"ds-total\" style=\"left:0;width:14%\"></i></div></td><td class=\"ds-amt\">₹13.3 L</td></tr></tbody></table>",
+      "css": ".ds-bridge { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; width:100%; border-collapse:collapse; color:hsl(var(--foreground, 221 43% 11%)); font-size:14px; font-variant-numeric:tabular-nums; } .ds-bridge th { text-align:left; font-weight:600; padding:8px 12px 8px 0; width:32%; vertical-align:middle; } .ds-bridge th span { display:block; font-size:12.5px; font-weight:400; color:hsl(var(--muted-foreground, 217 18% 34%)); } .ds-bridge td { padding:8px 0; vertical-align:middle; } .ds-track { position:relative; height:24px; } .ds-track i { position:absolute; top:0; height:24px; border-radius:4px; transition:left .24s cubic-bezier(.16,1,.3,1), width .24s cubic-bezier(.16,1,.3,1); } .ds-start { background:hsl(var(--muted-foreground, 217 18% 34%) / .45); } .ds-up { background:hsl(var(--primary, 180 77% 24%)); } .ds-down { background:hsl(var(--destructive, 4 76% 40%)); } .ds-total { background:hsl(var(--foreground, 221 43% 11%)); } .ds-amt { text-align:right; padding-left:12px !important; font-weight:700; white-space:nowrap; width:1%; } .ds-g { color:hsl(var(--primary, 180 77% 24%)); } .ds-r { color:hsl(var(--destructive, 4 76% 40%)); } .ds-tot th { font-weight:700; } .ds-end td, .ds-end th { border-top:1px solid hsl(var(--border, 220 17% 91%)); }"
+    },
+    {
+      "name": "Range Bar",
+      "kind": "custom",
+      "refersTo": "rounded.full",
+      "description": "Full past range, usual band (middle half), and a mark for now.",
+      "html": "<div class=\"ds-range\" role=\"img\" aria-label=\"4.1%; usual −4.2% to 10.5% over 12 months\"><i class=\"ds-full\" style=\"left:0;right:0\"></i><i class=\"ds-usual\" style=\"left:8%;right:64%\"></i><i class=\"ds-now\" style=\"left:23%\"></i></div><p class=\"ds-cap\">Usual −4.2% to 10.5% over 12 months</p>",
+      "css": ".ds-range { position:relative; height:16px; min-width:96px; } .ds-range i { position:absolute; display:block; } .ds-full { top:7px; height:2px; border-radius:9999px; background:hsl(var(--border, 220 17% 91%)); } .ds-usual { top:5px; height:6px; border-radius:9999px; background:hsl(var(--muted-foreground, 217 18% 34%) / .35); } .ds-now { top:0; height:16px; width:3px; margin-left:-1.5px; border-radius:2px; background:hsl(var(--foreground, 221 43% 11%)); } .ds-cap { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; margin:4px 0 0; font-size:12.5px; color:hsl(var(--muted-foreground, 217 18% 34%)); font-variant-numeric:tabular-nums; }"
+    },
+    {
+      "name": "Notice",
+      "kind": "custom",
+      "refersTo": "notice-watch",
+      "description": "Incomplete-data warning with an optional action.",
+      "html": "<div class=\"ds-notice\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg><div class=\"ds-msg\">June balance sheet not uploaded. Cash cycle and debt use May 2026 balance sheet.</div></div>",
+      "css": ".ds-notice { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:flex; align-items:center; gap:8px 16px; flex-wrap:wrap; border-radius:12px; border:1px solid hsl(var(--warning, 38 87% 31%) / .25); background:hsl(var(--warning-soft, 40 80% 94%)); color:hsl(var(--warning, 38 87% 31%)); padding:12px 16px; font-size:14px; font-weight:600; } .ds-msg { flex:1 1 14rem; min-width:0; }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Question-named pages; active item on Teal Wash.",
+      "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Overview</a><a href=\"#\">Profit &amp; Margin</a><a href=\"#\">Costs</a><a href=\"#\">Financial Health</a></nav>",
+      "css": ".ds-nav { font-family: Manrope, ui-sans-serif, system-ui, sans-serif; display:flex; flex-direction:column; gap:2px; width:208px; background:hsl(var(--card, 0 0% 100%)); padding:12px; } .ds-nav a { display:flex; align-items:center; border-radius:8px; padding:8px 12px; font-size:14px; font-weight:600; color:hsl(var(--muted-foreground, 217 18% 34%)); text-decoration:none; transition:background-color .15s, color .15s; } .ds-nav a:hover { background:hsl(var(--accent, 220 14% 94%)); color:hsl(var(--foreground, 221 43% 11%)); } .ds-nav a[aria-current=page] { background:hsl(var(--primary-soft, 180 32% 93%)); color:hsl(var(--primary, 180 77% 24%)); } .ds-nav a:focus-visible { outline:2px solid hsl(var(--primary, 180 77% 24%)); outline-offset:2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Argued Month",
+    "overview": "Every page makes one claim about the month in a plain sentence, and every panel below it proves that claim. A cool grey ground holds white panels separated by hairline rules. One PriyaFil deep teal marks what is good, selected or actionable. Red is reserved for money lost and bad standings, and amber for things to watch.\n\nThe density is that of a well-set financial report. Sentences lead, and figures follow in tabular Manrope. The page opens on a verdict sentence over one ruled strip of figures, never a tile grid. Section headings are findings, not category names. Charts are drawn to scale, reconcile on screen, and also exist as real tables.\n\nLight and dark carry equal weight. The dark theme keeps every role on a blue-green-tinted near-black.",
+    "keyCharacteristics": [
+      "Finding-led section headings generated from the figures",
+      "Ruled figure strip, never boxed tiles",
+      "One teal accent: good, selected, actionable",
+      "Colour always paired with words, sign and arrow, or a legend",
+      "Tabular numerals for every figure"
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Teal means good, selected or actionable, and nothing else. No second decorative hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Is Money Lost Rule",
+        "body": "Red marks only losses, adverse moves and bad standings. A fall is red only when the fall hurts.",
+        "section": "colors"
+      },
+      {
+        "name": "The Never Colour Alone Rule",
+        "body": "Every tone carries words, a sign and an arrow, or a legend.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every figure uses tabular numerals so columns align.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Labels are short sentence-case Slate words; never uppercase or letter-spaced.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hierarchy Over Uniformity Rule",
+        "body": "Verdict as open text, figures as a ruled strip, proofs as panels: three registers, never one repeated card.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Panel Rule",
+        "body": "Panels never cast shadows; a shadow means a layer truly floats.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lead each section with a finding generated from the figures (lib/narrative.ts).",
+      "Do use plain names for ledger heads (lib/labels.ts); only Statements keep Tally's names.",
+      "Do format every figure through lib/money.ts: ₹ Cr/L, one lakh precision per column, true minus, per-kg rates, no −0.0%.",
+      "Do label missing data and say which month a lagging figure comes from.",
+      "Do give every chart a text alternative and make bridge totals reconcile on screen.",
+      "Do colour a change by whether it helps the business, with a sign and an arrow."
+    ],
+    "donts": [
+      "Don't build rows or grids of KPI tiles.",
+      "Don't add eyebrow or kicker labels, or uppercase letter-spaced labels.",
+      "Don't add decorative sparklines, trend icons or background charts.",
+      "Don't use red beyond losses, adverse moves and bad standings, and don't add a second accent, gradients, gradient text or glassmorphism.",
+      "Don't render missing data as zero or as a red dash.",
+      "Don't let one outlier month flatten a series; mark it unusual and clip it.",
+      "Don't put shadows on panels."
+    ]
+  }
+}

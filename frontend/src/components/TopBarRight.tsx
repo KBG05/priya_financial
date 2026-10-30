@@ -4,12 +4,11 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/hooks/useTheme";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { api } from "@/api";
 
 const MONTH_ORDER = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"] as const;
@@ -18,13 +17,15 @@ interface Props {
     availableMonths: string[];
     fy: string;
     availableFYs: string[];
+    /** Called after a successful upload so the dashboard can reload its figures. */
+    onUploaded?: () => void;
 }
 
 // Small helper: label + info icon tooltip
 function FieldLabel({ label, info }: { label: string; info: string }) {
     return (
         <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
+            <span className="text-[12px] font-bold text-muted-foreground">{label}</span>
             <TooltipProvider delayDuration={100}>
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -68,7 +69,7 @@ function TogglePair({ value, options, onChange }: {
     onChange: (v: string) => void;
 }) {
     return (
-        <div className="flex rounded-md border border-border overflow-hidden text-[11px] font-medium">
+        <div className="flex rounded-md border border-border overflow-hidden text-[12.5px] font-medium">
             {options.map(opt => (
                 <button
                     key={opt}
@@ -125,7 +126,7 @@ function ScopeRow({ idPrefix, month, onMonthChange, replace, onReplaceChange, di
                 />
                 <label
                     htmlFor={`${idPrefix}-replace`}
-                    className="text-[11px] text-muted-foreground cursor-pointer select-none"
+                    className="text-[12.5px] text-muted-foreground cursor-pointer select-none"
                 >
                     Replace existing
                 </label>
@@ -141,7 +142,7 @@ function nextFySuffix(suffix: string): string {
     return `${y}_${y + 1}`;
 }
 
-export function TopBarRight({ fy, availableFYs }: Props) {
+export function TopBarRight({ fy, availableFYs, onUploaded }: Props) {
     const { theme, setTheme } = useTheme();
     const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
@@ -159,6 +160,13 @@ export function TopBarRight({ fy, availableFYs }: Props) {
 
     // ── Upload state ──────────────────────────────────────────────────────
     const [open, setOpen] = useState(false);
+
+    // Any page can ask for the upload panel (e.g. a "June not uploaded" notice).
+    useEffect(() => {
+        const openUpload = () => setOpen(true);
+        window.addEventListener("pf:open-upload", openUpload);
+        return () => window.removeEventListener("pf:open-upload", openUpload);
+    }, []);
 
     // Section 1: Core financials
     const [coreMode, setCoreMode] = useState<"MIS File" | "Sales & Exp File">("MIS File");
@@ -178,6 +186,7 @@ export function TopBarRight({ fy, availableFYs }: Props) {
     // Core section covers core financials + balance sheet (they come from the
     // same monthly export); item section covers item sales/purchases.
     const [selectedFy, setSelectedFy] = useState(fy);
+    useEffect(() => { if (!selectedFy && fy) setSelectedFy(fy); }, [fy, selectedFy]);
     const [coreMonth, setCoreMonth] = useState<string>("__all__");
     const [coreReplace, setCoreReplace] = useState(false);
     const [itemMonth, setItemMonth] = useState<string>("__all__");
@@ -225,6 +234,7 @@ export function TopBarRight({ fy, availableFYs }: Props) {
             if (res.ok) {
                 setLogs(res.logs);
                 setStatus("ok");
+                onUploaded?.();
             } else {
                 setLogs(res.logs || "");
                 setErrorStage(res.error_stage || "");
@@ -241,8 +251,8 @@ export function TopBarRight({ fy, availableFYs }: Props) {
         <div className="flex items-center gap-2">
             {/* Upload sheet */}
             <Sheet open={open} onOpenChange={setOpen}>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setOpen(true)}>
-                    <UploadCloud size={14} /> Upload & Process
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground" onClick={() => setOpen(true)}>
+                    <UploadCloud size={16} aria-hidden /> Upload
                 </Button>
 
                 <SheetContent className="w-105 sm:w-120 flex flex-col gap-0 overflow-y-auto">
@@ -271,7 +281,7 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                 onChange={v => { setCoreMode(v as any); setCoreFile(null); }}
                             />
                             <FilePicker id="core" file={coreFile} onChange={setCoreFile} />
-                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                            <p className="text-[12px] text-muted-foreground leading-relaxed">
                                 {coreMode === "MIS File"
                                     ? 'Upload "8. MIS Nov 25.xlsx" — contains all required sheets.'
                                     : 'Upload "Sales_Pur_Exps-Nov.25.xlsx" — Tally export with Purchase, Inventory Sales, Direct & Indirect Expns, Stock Valuation sheets.'}
@@ -291,13 +301,13 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                             {balMode === "Separate file" && (
                                 <>
                                     <FilePicker id="bal" file={balFile} onChange={setBalFile} />
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="text-[12px] text-muted-foreground">
                                         Upload "BS_PL_CF-Nov.25.xlsx" (Tally balance sheet export) or MIS file.
                                     </p>
                                 </>
                             )}
                             {balMode === "Same as core" && (
-                                <p className="text-[10px] text-muted-foreground">
+                                <p className="text-[12px] text-muted-foreground">
                                     {coreMode === "MIS File"
                                         ? "✓ The MIS file will be used for the Balance Sheet tab."
                                         : "⚠ Core is not a MIS file — balance sheet / KPIs will be skipped."}
@@ -350,22 +360,22 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                         {/* ── Config row ───────────────────────────────── */}
                         <div className="flex flex-wrap gap-3 items-end">
                             <div className="flex flex-col gap-1.5">
-                                <FieldLabel label="Fiscal Year" info="Target fiscal year suffix in the database." />
+                                <FieldLabel label="Fiscal year" info="The April–March year these files belong to. A file for June 2026 belongs to FY 26-27, not FY 25-26." />
                                 <Select value={selectedFy} onValueChange={setSelectedFy}>
-                                    <SelectTrigger className="w-28 h-8 text-xs bg-background border-border">
+                                    <SelectTrigger className="w-56 h-9 text-[13px] bg-background border-border">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {uploadFyOptions.map(f => (
-                                            <SelectItem key={f} value={f} className="text-xs">
-                                                FY {f.replace("_", "-")}
+                                            <SelectItem key={f} value={f} className="text-[13px]">
+                                                FY {f.replace("_", "-")} · Apr 20{f.split("_")[0]} – Mar 20{f.split("_")[1]}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            <p className="text-[10px] text-muted-foreground pb-2 max-w-[15rem] leading-relaxed">
+                            <p className="text-[12px] text-muted-foreground pb-2 max-w-[15rem] leading-relaxed">
                                 Month and “Replace existing” are set per section above — each
                                 file is ingested independently.
                             </p>
@@ -403,12 +413,12 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                     <div className="p-3 bg-destructive/5 border-b border-border flex flex-col gap-2">
                                         {errorStage && (
                                             <div className="flex items-start gap-2">
-                                                <span className="text-[10px] font-bold uppercase tracking-widest text-destructive/70 shrink-0 pt-px">Stage</span>
-                                                <span className="text-[11px] font-medium text-destructive">{errorStage}</span>
+                                                <span className="text-[12px] font-bold text-destructive/70 shrink-0 pt-px">Stage</span>
+                                                <span className="text-[12.5px] font-medium text-destructive">{errorStage}</span>
                                             </div>
                                         )}
                                         {errorDetail && errorDetail.split("\n\n").map((para, i) => (
-                                            <p key={i} className={`text-[11px] leading-relaxed ${i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                                            <p key={i} className={`text-[12.5px] leading-relaxed ${i === 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                                                 {para}
                                             </p>
                                         ))}
@@ -418,11 +428,11 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                                 {/* Raw log (collapsible feel — scrollable) */}
                                 {logs && (
                                     <details className="group">
-                                        <summary className="text-[10px] text-muted-foreground px-3 py-1.5 cursor-pointer hover:bg-muted/30 select-none list-none flex items-center gap-1">
+                                        <summary className="text-[12px] text-muted-foreground px-3 py-1.5 cursor-pointer hover:bg-muted/30 select-none list-none flex items-center gap-1">
                                             <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                                             {status === "ok" ? "View pipeline log" : "View full log for details"}
                                         </summary>
-                                        <pre className="text-[10px] leading-relaxed p-3 bg-muted/20 overflow-auto max-h-64 whitespace-pre-wrap font-mono border-t border-border">
+                                        <pre className="text-[12px] leading-relaxed p-3 bg-muted/20 overflow-auto max-h-64 whitespace-pre-wrap font-mono border-t border-border">
                                             {logs}
                                         </pre>
                                     </details>
@@ -436,8 +446,8 @@ export function TopBarRight({ fy, availableFYs }: Props) {
             {/* Theme toggle */}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Icon size={16} />
+                    <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Colour theme">
+                        <Icon size={17} aria-hidden />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-36">
@@ -452,11 +462,6 @@ export function TopBarRight({ fy, availableFYs }: Props) {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* User avatar */}
-            <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-[10px] bg-primary text-primary-foreground font-bold">PF</AvatarFallback>
-            </Avatar>
         </div>
     );
 }
