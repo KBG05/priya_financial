@@ -68,13 +68,14 @@
   --ring: 175 68% 26%;
   --table-header-bg: 176 40% 88%;
 
-  --sidebar-background: 210 30% 11%;
-  --sidebar-foreground: 0 0% 88%;
-  --sidebar-primary: 175 60% 42%;
+  /* Light sidebar: white panel against the tinted page, deep-teal active state */
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 210 32% 12%;
+  --sidebar-primary: 175 68% 26%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 175 32% 20%;
-  --sidebar-accent-foreground: 176 40% 82%;
-  --sidebar-border: 210 22% 20%;
+  --sidebar-accent: 178 32% 91%;
+  --sidebar-accent-foreground: 176 60% 20%;
+  --sidebar-border: 204 16% 84%;
   --sidebar-ring: 175 68% 26%;
 }
 
