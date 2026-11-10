@@ -160,7 +160,7 @@ function Dashboard() {
           </nav>
         </header>
 
-        <main className="px-5 py-3 flex flex-col gap-3 overflow-x-hidden min-w-0">
+        <main className="px-5 py-3 flex flex-col gap-3 overflow-x-clip min-w-0">
           {/* Filters — period (FY/month) shown inline with the fiscal-year label, no separate headline row */}
           <FilterBar
             periodLabel={periodLabel(fy, viewMode, months)}
@@ -175,7 +175,7 @@ function Dashboard() {
           />
 
           {/* Page content */}
-          <div className="flex flex-col gap-4 min-w-0 overflow-x-hidden">
+          <div className="flex flex-col gap-4 min-w-0 overflow-x-clip">
             {activeTab === "pal1"            && <Pal1Page months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
             {activeTab === "mty"             && <MtyPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
             {activeTab === "consumption"     && <ConsumptionPage months={months} viewMode={viewMode} prevMonths={prevMonths} fy={fy} />}
