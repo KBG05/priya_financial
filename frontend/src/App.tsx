@@ -86,10 +86,7 @@ function Dashboard() {
       <aside className="hidden md:flex flex-col w-56 shrink-0 h-screen bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border">
         <div className="flex items-center gap-2.5 h-16 px-5 border-b border-sidebar-border/80">
           <img src="/Priyafil-Logo-PNG-Final.png" alt="PriyaFil" className="h-7 w-auto object-contain" />
-          <div className="flex flex-col justify-center min-w-0">
-            <p className="font-display text-sm font-semibold leading-none truncate">PriyaFil</p>
-            <p className="text-[9px] uppercase tracking-widest font-semibold text-sidebar-primary mt-1">Command Center</p>
-          </div>
+          <p className="font-display text-sm font-semibold leading-none truncate">PriyaFil</p>
         </div>
 
         <nav className="flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto slim-scrollbar">
