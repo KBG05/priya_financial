@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { monthLabel } from "@/lib/history";
 import { api } from "@/api";
 import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
 
@@ -140,7 +142,7 @@ export function QuoteBuilderPage({ fy }: Props) {
         const q = skuSearch.trim().toLowerCase();
         if (!q) return skuOptions.slice(0, 50);
         return skuOptions.filter(
-            o => o.product_name.toLowerCase().includes(q) || String(o.code).includes(q)
+            o => (o.product_name ?? "").toLowerCase().includes(q) || String(o.code).includes(q)
         ).slice(0, 50);
     }, [skuOptions, skuSearch]);
 
@@ -195,6 +197,10 @@ export function QuoteBuilderPage({ fy }: Props) {
     const stockCovers = qty > 0 && stockTotalKg >= qty;
 
     const hasCostData = sku?.has_cost_data ?? false;
+    const hasSales = sku?.has_sales_history ?? hasCostData;
+    const rateCardLabel = sku?.month ? (sku.fy ? monthLabel(sku.fy, sku.month) : sku.month) : null;
+    const salesLabel = sku?.sales_month && sku.sales_fy ? monthLabel(sku.sales_fy, sku.sales_month) : null;
+    const sources = costSources(sku, rateCardLabel, salesLabel);
     const liveVariableCost = sourcing === "Produce in-house"
         ? (sku?.mfg_cost_per_kg ?? 0)
         : purchRate;
@@ -404,31 +410,40 @@ export function QuoteBuilderPage({ fy }: Props) {
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mfg cost breakdown</span>
-                                                {sku.month && (
-                                                    <span className="text-[10px] text-muted-foreground">basis: {sku.month}</span>
+                                                {rateCardLabel && (
+                                                    <span className="text-[10px] text-muted-foreground">basis: {rateCardLabel}</span>
                                                 )}
                                             </div>
+                                            <TooltipProvider delayDuration={150}>
                                             <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
-                                                <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} />
-                                                <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} />
-                                                <Row label="Fabricator Cost" value={sku.has_breakdown ? num(sku.fabricator_cost!) : "No data"} muted={!sku.has_breakdown} />
-                                                <Row label="Fabric Overheads" value={sku.has_breakdown ? num(sku.fabric_addon!) : "No data"} muted={!sku.has_breakdown} />
+                                                <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} source={sources.yarn} />
+                                                <Row label="Fabricator Cost" value={sku.has_breakdown ? num(sku.fabricator_cost!) : "No data"} muted={!sku.has_breakdown} source={sources.fabricator} />
+                                                <Row
+                                                    label="Fabric Overheads"
+                                                    value={!sku.has_breakdown ? "No data" : sku.conversion_combined ? "in Yarn" : num(sku.fabric_addon!)}
+                                                    muted={!sku.has_breakdown || sku.conversion_combined}
+                                                    source={sources.fabricOverheads}
+                                                />
                                             </div>
                                             <div className="mt-1.5 pt-1.5 border-t border-border/30">
-                                                <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize />
+                                                <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize source={sources.mfg} />
                                             </div>
+                                            </TooltipProvider>
                                         </div>
 
                                         <div>
                                             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Historical benchmarks</span>
+                                            <TooltipProvider delayDuration={150}>
                                             <div className="flex flex-col gap-1.5 mt-1.5">
-                                                <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
-                                                <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
+                                                <Row label="Hist Purchase Rate ₹/Kg" value={hasSales ? num(sku.hist_purchase_rate_per_kg) : "No sales yet"} muted={!hasSales} source={sources.purchase} />
+                                                <Row label="Hist Avg SP ₹/Kg" value={hasSales ? num(sku.hist_avg_sp_per_kg) : "No sales yet"} muted={!hasSales} source={sources.sp} />
                                                 <Row
                                                     label="Wt/Mt"
                                                     value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
                                                 />
                                             </div>
+                                            </TooltipProvider>
                                         </div>
                                     </div>
                                 </div>
@@ -573,10 +588,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
-function Row({ label, value, emphasize, negative, muted }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean }) {
+/** Where each Quote Builder figure comes from — shown on hover. */
+function costSources(sku: QuoteBuilderSku | null, rateCard: string | null, sales: string | null) {
+    const card = rateCard ? `Contribution, ${rateCard} rate card` : "Contribution rate card";
+    const fabBase = (sku?.fab_charge_per_mt ?? 0) * (sku?.mts_per_kg ?? 0);
+    return {
+        rm: `${card}: raw-material consumption ₹/kg (Consumption: value ÷ qty) × 1.0037 yield + 2% wastage.`,
+        yarn: sku?.conversion_combined
+            ? `${card}: yarn conversion and fabric add-on, which this FY's records hold as one figure — variable yarn and fabric expenses (Direct Expenses) ÷ kg of RM consumed.`
+            : `${card}: Wages-Yarn, Power, R&M Machinery/Electricals, Freight Inwards, Rent, Misc and Yarn Processing charges (Direct Expenses) ÷ kg of RM consumed.`,
+        fabricOverheads: sku?.conversion_combined
+            ? "Included in Yarn for this rate card's FY."
+            : `${card}: Wages-Fabric, Wages-Inspection & Dispatch and working-capital charges (Bank, LC, OCC) from Direct Expenses ÷ kg of RM consumed.`,
+        fabricator: fabBase
+            ? `Product specification (not Contribution): fabrication charge ₹${num(sku!.fab_charge_per_mt!)}/mt × ${num(sku!.mts_per_kg!)} m/kg = ₹${num(fabBase)}/kg, plus the ₹${num(sku!.fab_rate_increase ?? 0)}/kg PMC rate increase.`
+            : "Product specification (not Contribution): this SKU has no fabrication charge on file.",
+        mfg: "RM + Yarn + Fabric Overheads + Fabricator Cost, as in the PMC SKU Master.",
+        sp: sales
+            ? `Contribution, ${sales}: this SKU's realised selling price (sales value ÷ kg sold) in its latest month with sales.`
+            : "This SKU has no sales on record, so there is no historical selling price.",
+        purchase: sales
+            ? `Contribution, ${sales}: trading purchases of this SKU (purchase register) value ÷ kg; 0 when none were bought for resale.`
+            : "This SKU has no sales on record.",
+    };
+}
+
+function Row({ label, value, emphasize, negative, muted, source }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean; source?: string }) {
     return (
         <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">{label}</span>
+            {source ? (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span tabIndex={0} className="text-muted-foreground underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 cursor-help outline-none focus-visible:text-foreground">
+                            {label}
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" sideOffset={6} className="max-w-72 leading-relaxed">{source}</TooltipContent>
+                </Tooltip>
+            ) : (
+                <span className="text-muted-foreground">{label}</span>
+            )}
             <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : "font-medium"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
                 {value}
             </span>

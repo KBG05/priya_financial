@@ -23,8 +23,8 @@ interface Props {
     className?: string;
 }
 
-function isTotalLabel(label: string) {
-    const l = label.toLowerCase();
+function isTotalLabel(label: string | null | undefined) {
+    const l = (label ?? "").toLowerCase();
     return l.startsWith("total") || l === "nett profit" || l.startsWith("grand") || l.endsWith("->");
 }
 

@@ -7,29 +7,28 @@ import { StatStrip } from "@/components/StatStrip";
 import { api } from "@/api";
 import { buildLedgerData } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
-import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
 export function DirectExpensesPage({ months, viewMode, fy }: Props) {
     const [data, setData] = useState<any[]>([]);
-    const [allData, setAllData] = useState<any[]>([]);
+    const [trendHist, setTrendHist] = useState<HistPoint<any>[]>([]);
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Total");
     const cur = months[months.length - 1];
 
     useEffect(() => {
         setLoading(true);
-        const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
             api.directExpenses(months, fy),
-            api.directExpenses(allMonths, fy),
-        ]).then(([r, all]) => {
+            fetchHistory(api.directExpenses, fy, cur),
+        ]).then(([r, h]) => {
             setData(r.data);
-            setAllData(all.data);
+            setTrendHist(h);
             setLoading(false);
         });
-    }, [months.join(",")]);
+    }, [months.join(","), fy]);
 
     if (loading) return <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12" />)}</div>;
 
@@ -38,8 +37,8 @@ export function DirectExpensesPage({ months, viewMode, fy }: Props) {
 
     const trendOptions = ["Total", ...categories, ...lineItems];
 
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
-        const monthRows = allData.filter(r => r.month === m);
+    const trendData = trendHist.map(pt => {
+        const monthRows = pt.rows;
         let val = 0;
         if (trendOption === "Total") {
             val = monthRows.reduce((sum, r) => sum + (r.value ?? 0), 0);
@@ -48,7 +47,7 @@ export function DirectExpensesPage({ months, viewMode, fy }: Props) {
         } else {
             val = monthRows.filter(r => r.line_item === trendOption).reduce((sum, r) => sum + (r.value ?? 0), 0);
         }
-        return { month: m, value: val };
+        return { month: pt.label, value: val };
     });
 
     const curTotal = viewMode === "single"

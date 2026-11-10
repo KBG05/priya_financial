@@ -8,7 +8,7 @@ import type { ColDef } from "@/components/LedgerTable";
 import { api } from "@/api";
 import { fmt } from "@/lib/format";
 import type { ViewMode } from "@/types";
-import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 interface MatRow { month: string; material: string;[k: string]: any; }
@@ -16,7 +16,7 @@ interface MatRow { month: string; material: string;[k: string]: any; }
 export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<MatRow[]>([]);
     const [prevData, setPrevData] = useState<MatRow[]>([]);
-    const [allData, setAllData] = useState<MatRow[]>([]);
+    const [trendHist, setTrendHist] = useState<HistPoint<MatRow>[]>([]);
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState<string>("");
 
@@ -31,13 +31,12 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
 
     useEffect(() => {
         setLoading(true);
-        const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
             api.consumption(months, fy),
             prevMonths.length ? api.consumption(prevMonths, fy) : Promise.resolve({ data: [] }),
-            api.consumption(allMonths, fy),
-        ]).then(([r, p, all]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setAllData(all.data as MatRow[]); setLoading(false); });
-    }, [months.join(","), prevMonths.join(",")]);
+            fetchHistory<MatRow>(api.consumption, fy, cur),
+        ]).then(([r, p, h]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setTrendHist(h); setLoading(false); });
+    }, [months.join(","), prevMonths.join(","), fy]);
 
     if (loading) return (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -62,10 +61,10 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
         { label: "Consumption", qk: "qty", vk: "value", rk: "rate" },
     ];
 
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
-        const matRow = allData.find(r => r.material === trendOption && r.month === m);
+    const trendData = trendHist.map(pt => {
+        const matRow = pt.rows.find(r => r.material === trendOption);
         return {
-            month: m,
+            month: pt.label,
             value: matRow?.value ?? 0,
             rate: matRow?.rate ?? (matRow?.qty ? (matRow.value / matRow.qty) : 0),
             qty: matRow?.qty ?? 0,

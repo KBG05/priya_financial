@@ -7,6 +7,7 @@ import { StatStrip } from "@/components/StatStrip";
 import { api } from "@/api";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
@@ -22,6 +23,7 @@ const HIGHLIGHT_KPIS = ["Revenue growth", "Gross margin", "EBITDA", "Net Margin"
 export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
     const [allData, setAllData] = useState<any[]>([]); // all months for sparklines  
     const [aggKpis, setAggKpis] = useState<Record<string, number | null>>({});
+    const [trendHist, setTrendHist] = useState<HistPoint<any>[]>([]);
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Revenue growth");
     const cur = months[months.length - 1];
@@ -31,8 +33,9 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
         setLoading(true);
         const allMonths = [...MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1)), "FY"];
         // fetch all months + FY row for table and sparklines
-        api.kpis(allMonths, fy).then(r => { setAllData(r.data); setLoading(false); });
-    }, [months.join(","), prevMonths.join(",")]);
+        Promise.all([api.kpis(allMonths, fy), fetchHistory(api.kpis, fy, cur)])
+            .then(([r, h]) => { setAllData(r.data); setTrendHist(h); setLoading(false); });
+    }, [months.join(","), prevMonths.join(","), fy]);
 
     useEffect(() => {
         if (viewMode === "single") { setAggKpis({}); return; }
@@ -58,9 +61,9 @@ export function KpisPage({ months, viewMode, prevMonths, fy }: Props) {
             .filter((v): v is number => v != null);
 
     const trendOptions = KPI_GROUPS.flatMap(g => g.items);
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => ({
-        month: m,
-        value: kv(trendOption, m) ?? 0
+    const trendData = trendHist.map(pt => ({
+        month: pt.label,
+        value: pt.rows.find(r => r.kpi_name === trendOption)?.value ?? 0,
     }));
 
     return (

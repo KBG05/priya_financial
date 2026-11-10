@@ -8,6 +8,7 @@ import { api } from "@/api";
 import { buildLedgerData, getVal, aggVal } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
@@ -15,6 +16,7 @@ export function MtyPage({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<any[]>([]);
     const [prevData, setPrevData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);
+    const [trendHist, setTrendHist] = useState<HistPoint<any>[]>([]); // every month on record, all FYs
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Nett Profit");
     const cur = months[months.length - 1];
@@ -27,11 +29,12 @@ export function MtyPage({ months, viewMode, prevMonths, fy }: Props) {
             api.mty(months, fy),
             prevMonths.length ? api.mty(prevMonths, fy) : Promise.resolve({ data: [] }),
             api.mty(allMonths, fy),
-        ]).then(([r, p, all]) => {
-            setData(r.data); setPrevData(p.data); setAllData(all.data);
+            fetchHistory(api.mty, fy, cur),
+        ]).then(([r, p, all, h]) => {
+            setData(r.data); setPrevData(p.data); setAllData(all.data); setTrendHist(h);
             setLoading(false);
         });
-    }, [months.join(","), prevMonths.join(",")]);
+    }, [months.join(","), prevMonths.join(","), fy]);
 
     if (loading) return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -109,12 +112,12 @@ export function MtyPage({ months, viewMode, prevMonths, fy }: Props) {
         "Op stock RM",
         "Cl Stock RM",
     ];
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
-        const row = allData.find(r => r.line_item === trendOption && r.month === m);
+    const trendData = trendHist.map(pt => {
+        const row = pt.rows.find(r => r.line_item === trendOption);
         const value = row?.value ?? 0;
         const qty = row?.qty ?? 0;
         return {
-            month: m,
+            month: pt.label,
             value,
             qty,
             rate: qty ? value / qty : 0,

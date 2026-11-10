@@ -3,7 +3,7 @@ import {
     ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Cell,
 } from "recharts";
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown, ChevronRight, Table2 } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown, ChevronRight, Table2, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatStrip } from "@/components/StatStrip";
 import { BreakdownGrid } from "@/components/BreakdownGrid";
@@ -87,7 +87,11 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
             ? months
             : MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         api.contribution(allMonths, fy)
-            .then(r => { setData(r.data as ContribRow[]); setLoading(false); })
+            .then(r => {
+                // Products missing from product_spec come back with a null name.
+                setData((r.data as ContribRow[]).map(row => ({ ...row, product_name: row.product_name ?? `Product ${row.product_id}` })));
+                setLoading(false);
+            })
             .catch(() => setLoading(false));
     }, [months.join(","), prevMonths.join(","), viewMode]);
 
@@ -184,8 +188,21 @@ export function ContributionPage({ months, viewMode, prevMonths, fy }: Props) {
         </div>
     );
 
+    // A month processed from item sales alone (no core Tally file yet) has no
+    // RM / yarn / fabric rate card, so its costs are 0 and contribution is overstated.
+    const costingIncomplete = curRows.length > 0 && curRows.every(r => !r.rm_price);
+
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
+            {costingIncomplete && (
+                <p role="status" className="flex items-start gap-2 text-sm text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5">
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                    <span>
+                        <strong>{cur} costing is incomplete.</strong> Only item sales have been uploaded for {cur}, so RM, yarn and fabric
+                        costs are 0 and contribution below is overstated. Upload {cur}'s Sales_Pur_Exps (core) file to complete it.
+                    </span>
+                </p>
+            )}
             <StatStrip leadFirst stats={[
                 { title: "Total Contribution Value", value: totalContribValue, rupee: true, deltaMode: "default" },
                 { title: "Avg Contribution / kg",    value: avgContribPerKg,   rupee: true, deltaMode: "default" },

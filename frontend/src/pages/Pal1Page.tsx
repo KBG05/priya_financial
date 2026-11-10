@@ -8,6 +8,7 @@ import { api } from "@/api";
 import { buildLedgerData, getVal, aggVal } from "@/lib/pivot";
 import type { ViewMode } from "@/types";
 import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 
@@ -15,6 +16,7 @@ export function Pal1Page({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<any[]>([]);
     const [prevData, setPrevData] = useState<any[]>([]);
     const [allData, setAllData] = useState<any[]>([]);   // all months for sparklines
+    const [trendHist, setTrendHist] = useState<HistPoint<any>[]>([]); // every month on record, all FYs
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState("Gross Profit");
     const cur = months[months.length - 1];
@@ -27,11 +29,12 @@ export function Pal1Page({ months, viewMode, prevMonths, fy }: Props) {
             api.pal1(months, fy),
             prevMonths.length ? api.pal1(prevMonths, fy) : Promise.resolve({ data: [] }),
             api.pal1(allMonths, fy),
-        ]).then(([r, p, all]) => {
-            setData(r.data); setPrevData(p.data); setAllData(all.data);
+            fetchHistory(api.pal1, fy, cur),
+        ]).then(([r, p, all, h]) => {
+            setData(r.data); setPrevData(p.data); setAllData(all.data); setTrendHist(h);
             setLoading(false);
         });
-    }, [months.join(","), prevMonths.join(",")]);
+    }, [months.join(","), prevMonths.join(","), fy]);
 
     if (loading) return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -79,12 +82,12 @@ export function Pal1Page({ months, viewMode, prevMonths, fy }: Props) {
         "Purchase-Fabric+ Cons",
         "Cl Stk",
     ];
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
-        const row = allData.find(r => r.line_item === trendOption && r.month === m);
+    const trendData = trendHist.map(pt => {
+        const row = pt.rows.find(r => r.line_item === trendOption);
         const value = row?.value ?? 0;
         const qty = row?.qty ?? 0;
         const rate = row?.rate ?? (qty ? value / qty : 0);
-        return { month: m, value, qty, rate };
+        return { month: pt.label, value, qty, rate };
     });
     const useCombo = comboItems.has(trendOption);
 

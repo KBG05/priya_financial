@@ -73,6 +73,15 @@ export interface QuoteBuilderSku {
     fabric_addon: number | null;
     fabricator_cost: number | null;
     has_breakdown: boolean;
+    /** FY of the rate-card month in `month` (RM, yarn, fabric add-on). */
+    fy?: string | null;
+    /** Older FY tables store yarn conversion + fabric add-on as one figure (in `yarn_conversion`). */
+    conversion_combined?: boolean;
+    fab_charge_per_mt?: number;
+    fab_rate_increase?: number;
+    has_sales_history?: boolean;
+    sales_fy?: string | null;
+    sales_month?: string | null;
 }
 
 export interface QuoteBuilderStockRow {

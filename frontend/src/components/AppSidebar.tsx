@@ -37,7 +37,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     />
                     {isExpanded && (
                         <div className="min-w-0 flex flex-col justify-center">
-                            <p className="text-sm font-bold leading-none text-sidebar-foreground truncate tracking-tight">Priya Textile</p>
+                            <p className="text-sm font-bold leading-none text-sidebar-foreground truncate tracking-tight">PriyaFil</p>
                             <p className="text-[10px] uppercase tracking-widest font-semibold text-sidebar-foreground/50 mt-1">Financial Dashboard</p>
                         </div>
                     )}
