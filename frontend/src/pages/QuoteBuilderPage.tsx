@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Search, X, RotateCcw, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { monthLabel } from "@/lib/history";
+import { BaleStockReport } from "@/components/BaleStockReport";
 import { api } from "@/api";
-import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
+import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow, RateCardComponent } from "@/types";
 
 interface Props { fy?: string; }
 
@@ -201,11 +202,16 @@ export function QuoteBuilderPage({ fy }: Props) {
     const rateCardLabel = sku?.month ? (sku.fy ? monthLabel(sku.fy, sku.month) : sku.month) : null;
     const salesLabel = sku?.sales_month && sku.sales_fy ? monthLabel(sku.sales_fy, sku.sales_month) : null;
     const sources = costSources(sku, rateCardLabel, salesLabel);
+    const fabStatus = sku?.fabricator?.status;
+    const financePerKg = sku?.rate_card?.fabric_overheads.finance_per_kg ?? 0;
     const liveVariableCost = sourcing === "Produce in-house"
         ? (sku?.mfg_cost_per_kg ?? 0)
         : purchRate;
     const variableCost = vcOverride !== null ? (parseFloat(vcOverride) || 0) : liveVariableCost;
     const variableCostIsKnown = vcOverride !== null || sourcing === "Purchase & resell" || hasCostData;
+    // The live Mfg Cost is missing or understated (no Wt/Mt, blank fab rate, missing expense rows).
+    // We still quote on it — the verdict carries a flag until the user overrides or buys in.
+    const costIncomplete = sourcing === "Produce in-house" && vcOverride === null && sku?.cost_complete === false;
 
     const contributionPerKg = proposedSalePrice - variableCost;
     const pvRatio = proposedSalePrice > 0 ? contributionPerKg / proposedSalePrice : 0;
@@ -355,7 +361,23 @@ export function QuoteBuilderPage({ fy }: Props) {
                             </CardHeader>
                             <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
                                 <div className="font-semibold text-base text-foreground">{sku.product_name}</div>
-                                {skuWarning && (
+                                {sku.cost_warnings ? (
+                                    sku.cost_warnings.length > 0 && (
+                                        <ul className="flex flex-col gap-1">
+                                            {sku.cost_warnings.map(w => (
+                                                <li
+                                                    key={w.code}
+                                                    className={`flex items-start gap-1.5 text-xs rounded-md px-2 py-1.5 ${w.level === "warning" ? "text-warning bg-warning/10" : "text-muted-foreground bg-muted/40"}`}
+                                                >
+                                                    {w.level === "warning"
+                                                        ? <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                                                        : <Info size={12} className="shrink-0 mt-0.5" />}
+                                                    {w.message}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )
+                                ) : skuWarning && (
                                     <p className="flex items-start gap-1.5 text-xs text-warning bg-warning/10 rounded-md px-2 py-1.5">
                                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
                                         {skuWarning}
@@ -416,15 +438,39 @@ export function QuoteBuilderPage({ fy }: Props) {
                                             </div>
                                             <TooltipProvider delayDuration={150}>
                                             <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
-                                                <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                {sku.rate_card ? (
+                                                    <>
+                                                        <Row label="RM (base)" value={sku.has_breakdown ? num(sku.rate_card.rm.rate_base) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                        {sku.has_breakdown && (
+                                                            <Row sub label="+ Yield & wastage" value={num(sku.rate_card.rm.uplift_per_kg)} source={sources.rmUplift} />
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                )}
                                                 <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} source={sources.yarn} />
-                                                <Row label="Fabricator Cost" value={sku.has_breakdown ? num(sku.fabricator_cost!) : "No data"} muted={!sku.has_breakdown} source={sources.fabricator} />
+                                                <Row
+                                                    label="Fabricator Cost"
+                                                    value={!sku.has_breakdown
+                                                        ? "No data"
+                                                        : fabStatus === "rate_blank"
+                                                        ? `${num(sku.fabricator_cost!)} · rate not on file`
+                                                        : num(sku.fabricator_cost!)}
+                                                    muted={!sku.has_breakdown || fabStatus === "rate_zero"}
+                                                    warn={sku.has_breakdown && fabStatus === "rate_blank"}
+                                                    source={sources.fabricator}
+                                                />
                                                 <Row
                                                     label="Fabric Overheads"
                                                     value={!sku.has_breakdown ? "No data" : sku.conversion_combined ? "in Yarn" : num(sku.fabric_addon!)}
                                                     muted={!sku.has_breakdown || sku.conversion_combined}
                                                     source={sources.fabricOverheads}
                                                 />
+                                                {sku.has_breakdown && financePerKg > 0 && (
+                                                    <span className="-mt-1 text-right text-[10px] text-muted-foreground tabular-nums">
+                                                        incl. ₹{num(financePerKg)} working-capital finance
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="mt-1.5 pt-1.5 border-t border-border/30">
                                                 <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize source={sources.mfg} />
@@ -553,13 +599,19 @@ export function QuoteBuilderPage({ fy }: Props) {
                                         lead
                                     />
                                 </div>
-                                <div className="flex items-center justify-center px-5 py-4 lg:w-56 shrink-0 border-t lg:border-t-0 lg:border-l border-border/60 bg-muted/20">
+                                <div className="flex flex-col items-center justify-center gap-1.5 px-5 py-4 lg:w-56 shrink-0 border-t lg:border-t-0 lg:border-l border-border/60 bg-muted/20">
                                     <Badge
                                         variant="outline"
                                         className={`w-full justify-center py-2.5 text-xs font-semibold transition-colors duration-500 ease-out motion-reduce:transition-none ${verdictPulsing ? "animate-verdict-pulse" : ""} ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}
                                     >
                                         {canQuote ? VERDICT_LABEL[verdict] : "Enter Rate/Mt to see verdict"}
                                     </Badge>
+                                    {costIncomplete && (
+                                        <span role="status" className="flex items-center gap-1 text-[11px] font-medium text-warning">
+                                            <AlertTriangle size={11} className="shrink-0" />
+                                            Cost incomplete — see SKU warnings
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-x-8 gap-y-1.5 px-4 py-3 border-t border-border/60 text-xs">
@@ -574,6 +626,9 @@ export function QuoteBuilderPage({ fy }: Props) {
                     </Card>
                 </div>
             )}
+
+            {/* ── Bale-wise stock from the uploaded Bale Stock report (session-only) ── */}
+            <BaleStockReport skuName={sku?.product_name} />
         </div>
     );
 }
@@ -588,22 +643,53 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
-/** Where each Quote Builder figure comes from — shown on hover. */
+/** "Wages-Yarn ₹8,65,380, Power Bill ₹6,34,291, …" — the month's lines behind a rate-card component. */
+function itemsText(c: RateCardComponent): string {
+    return c.items
+        .filter(i => i.amount !== 0 || !i.present)
+        .map(i => `${i.particular} ${i.present ? `₹${num(i.amount)}` : "(no row, ₹0)"}`)
+        .join(", ");
+}
+
+/** Where each Quote Builder figure comes from — shown on hover, built from the figures the backend used. */
 function costSources(sku: QuoteBuilderSku | null, rateCard: string | null, sales: string | null) {
-    const card = rateCard ? `Contribution, ${rateCard} rate card` : "Contribution rate card";
-    const fabBase = (sku?.fab_charge_per_mt ?? 0) * (sku?.mts_per_kg ?? 0);
+    const card = rateCard ? `${rateCard} rate card` : "Rate card";
+    const rc = sku?.rate_card;
+    const rmKg = rc ? rc.rm.qty.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : "";
+    const fab = sku?.fabricator;
+    let fabricator: string;
+    if (!fab) {
+        fabricator = "Product specification: fabrication charge ₹/mt × m/kg, plus the PMC rate increase.";
+    } else if (fab.status === "ok") {
+        fabricator = `Product specification (not the rate card): fabrication charge ₹${num(fab.rate_per_mt ?? 0)}/mt × ${num(fab.mts_per_kg)} m/kg = ₹${num(fab.base_per_kg)}/kg, plus the ₹${num(fab.increase_per_kg)}/kg PMC rate increase = ₹${num(fab.per_kg)}/kg.`;
+    } else if (fab.status === "rate_zero") {
+        fabricator = "Product specification: Rate/Mt is 0 for this SKU, so it carries no fabrication charge.";
+    } else if (fab.status === "rate_blank") {
+        fabricator = "Product specification: no fabrication rate on file for this SKU, so it is counted as ₹0 and Mfg Cost is understated.";
+    } else {
+        fabricator = "Product specification: this SKU has no Wt/Mt, so it can't be costed.";
+    }
+    const resold = rc?.rm.resold ?? [];
+    const resoldText = resold.length
+        ? ` Resold RM is taken out at average cost: ${resold
+            .map(r => `${r.material} ${r.qty.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg @ ₹${num(r.avg_cost_per_kg)}/kg (file rate ₹${num(r.qty ? r.value_in_file / r.qty : 0)})`)
+            .join(", ")}. The Consumption page shows ₹${num(rc!.rm.consumption_page_rate)}/kg because it uses the file's rate.`
+        : "";
     return {
-        rm: `${card}: raw-material consumption ₹/kg (Consumption: value ÷ qty) × 1.0037 yield + 2% wastage.`,
-        yarn: sku?.conversion_combined
-            ? `${card}: yarn conversion and fabric add-on, which this FY's records hold as one figure — variable yarn and fabric expenses (Direct Expenses) ÷ kg of RM consumed.`
-            : `${card}: Wages-Yarn, Power, R&M Machinery/Electricals, Freight Inwards, Rent, Misc and Yarn Processing charges (Direct Expenses) ÷ kg of RM consumed.`,
-        fabricOverheads: sku?.conversion_combined
-            ? "Included in Yarn for this rate card's FY."
-            : `${card}: Wages-Fabric, Wages-Inspection & Dispatch and working-capital charges (Bank, LC, OCC) from Direct Expenses ÷ kg of RM consumed.`,
-        fabricator: fabBase
-            ? `Product specification (not Contribution): fabrication charge ₹${num(sku!.fab_charge_per_mt!)}/mt × ${num(sku!.mts_per_kg!)} m/kg = ₹${num(fabBase)}/kg, plus the ₹${num(sku!.fab_rate_increase ?? 0)}/kg PMC rate increase.`
-            : "Product specification (not Contribution): this SKU has no fabrication charge on file.",
-        mfg: "RM + Yarn + Fabric Overheads + Fabricator Cost, as in the PMC SKU Master.",
+        rm: rc
+            ? `${card}: ${rmKg} kg raw material (HDPE + MB + CP) consumed — opening + purchases − resold − closing — at ₹${num(rc.rm.rate_base)}/kg.${resoldText}`
+            : `${card}: raw-material consumption ₹/kg (Consumption: value ÷ qty) × yield × wastage.`,
+        rmUplift: rc
+            ? `PMC Rate Card: ₹${num(rc.rm.rate_base)} base × ${rc.rm.yield} yield × ${(1 + rc.rm.wastage_pct).toFixed(2)} wastage = ₹${num(rc.rm.price)}/kg, so +₹${num(rc.rm.uplift_per_kg)}/kg. Included in Mfg Cost.`
+            : "",
+        yarn: rc
+            ? `${card}: ${itemsText(rc.yarn)} = ₹${num(rc.yarn.total)} (Direct Expenses) ÷ ${rmKg} kg RM consumed = ₹${num(rc.yarn.per_kg)}/kg.`
+            : `${card}: variable yarn expenses (Direct Expenses) ÷ kg of RM consumed.`,
+        fabricOverheads: rc
+            ? `${card}: ${itemsText(rc.fabric_overheads)} = ₹${num(rc.fabric_overheads.total)} (Direct Expenses) ÷ ${rmKg} kg RM consumed = ₹${num(rc.fabric_overheads.per_kg)}/kg, of which ₹${num(rc.fabric_overheads.finance_per_kg)}/kg is working-capital finance (Bank, LC, OCC).`
+            : `${card}: variable fabric expenses and working-capital charges (Direct Expenses) ÷ kg of RM consumed.`,
+        fabricator,
+        mfg: "RM base + yield & wastage + Yarn + Fabric Overheads + Fabricator Cost, as in the PMC SKU Master.",
         sp: sales
             ? `Contribution, ${sales}: this SKU's realised selling price (sales value ÷ kg sold) in its latest month with sales.`
             : "This SKU has no sales on record, so there is no historical selling price.",
@@ -613,9 +699,9 @@ function costSources(sku: QuoteBuilderSku | null, rateCard: string | null, sales
     };
 }
 
-function Row({ label, value, emphasize, negative, muted, source }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean; source?: string }) {
+function Row({ label, value, emphasize, negative, muted, warn, sub, source }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean; warn?: boolean; sub?: boolean; source?: string }) {
     return (
-        <div className="flex items-center justify-between gap-3">
+        <div className={`flex items-center justify-between gap-3 ${sub ? "-mt-1 pl-3 text-xs" : ""}`}>
             {source ? (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -628,7 +714,7 @@ function Row({ label, value, emphasize, negative, muted, source }: { label: stri
             ) : (
                 <span className="text-muted-foreground">{label}</span>
             )}
-            <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : "font-medium"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
+            <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : sub ? "font-normal" : "font-medium"} ${negative ? "text-destructive" : warn ? "text-warning" : muted || sub ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
                 {value}
             </span>
         </div>

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 from typing import List
-from fastapi import FastAPI, Query, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -19,9 +19,13 @@ from dotenv import load_dotenv
 try:
     # When imported as package: backend.main
     from .db import query
+    from .bale_stock import BaleStockError, MAX_UPLOAD_BYTES, parse_bale_stock
+    from .quote_costing import fabricator, latest_rate_card
 except ImportError:
     # When run from backend dir: uvicorn main:app
     from db import query
+    from bale_stock import BaleStockError, MAX_UPLOAD_BYTES, parse_bale_stock
+    from quote_costing import fabricator, latest_rate_card
 
 load_dotenv()
 
@@ -282,10 +286,6 @@ def _contribution_fys(selected: str) -> list[str]:
     return [f for f in fys if f == selected] + [f for f in fys if f < selected]
 
 
-# PMC rules, mirrored from sheets/calculate_contribution.py.
-_FAB_RATE_INCREASE_PER_KG = 2.0
-
-
 def _table_columns(table: str) -> set[str]:
     return {
         r["column_name"] for r in query(
@@ -298,42 +298,6 @@ def _table_columns(table: str) -> set[str]:
 
 def _month_key(m: str) -> int:
     return MONTH_ORDER.index(m) if m in MONTH_ORDER else -1
-
-
-def _rate_card(fys: list[str]) -> Optional[dict]:
-    """
-    The latest month's PMC rate card: Stage 1 RM, Stage 2 yarn conversion and
-    the Stage 3 fabric add-on. These are per-month figures shared by every SKU.
-
-    A month counts only when its RM rate and conversion are non-zero: a month
-    whose contribution was computed from item sales alone (core Tally file not
-    uploaded yet) carries zeros, and quoting off it would understate cost.
-    """
-    for fy in fys:
-        table = f"contribution_{fy}"
-        cols = _table_columns(table)
-        split = {"yarn_conversion", "fabric_addon"} <= cols
-        rows = query(
-            f"""SELECT month, MAX(rm_price) AS rm_price, MAX(filament_conversion) AS conversion
-                    {", MAX(yarn_conversion) AS yarn_conversion, MAX(fabric_addon) AS fabric_addon" if split else ""}
-                FROM {table}
-                WHERE COALESCE(rm_price, 0) > 0 AND COALESCE(filament_conversion, 0) > 0
-                GROUP BY month"""
-        )
-        if not rows:
-            continue
-        r = max(rows, key=lambda x: _month_key(x["month"]))
-        return {
-            "fy": fy,
-            "month": r["month"],
-            "rm_price": r["rm_price"],
-            "conversion": r["conversion"],
-            # Older FY tables store yarn conversion + fabric add-on as one figure.
-            "yarn_conversion": r["yarn_conversion"] if split else r["conversion"],
-            "fabric_addon": r["fabric_addon"] if split else None,
-            "conversion_combined": not split,
-        }
-    return None
 
 
 def _last_sale(code: int, fys: list[str]) -> Optional[dict]:
@@ -366,11 +330,15 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
     """
     Auto-filled SKU data for Quote Builder, costed the way the PMC engine does:
 
-        Mfg Cost ₹/kg = RM + Yarn conversion + Fabric add-on   (latest month's rate card)
-                      + Fabricator cost                         (this SKU's product spec)
+        Mfg Cost ₹/kg = RM + Yarn + Fabric Overheads   (latest complete month's rate card,
+                                                        computed live from that month's inputs)
+                      + Fabricator cost                (this SKU's product spec)
 
     so every SKU with a Wt/Mt gets a cost, whether or not it sold recently.
     Hist SP / purchase rate come from the SKU's latest month with sales.
+
+    cost_warnings lists every reason the cost may be incomplete or need a
+    second look; cost_complete is False when Mfg Cost is missing or understated.
     """
     if not re.fullmatch(r"\d{2}_\d{2}", fy):
         return {"data": None, "warning": f"Invalid FY {fy!r}."}
@@ -379,7 +347,8 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
         """SELECT product_code AS code, MIN(product_name) AS product_name,
                CASE WHEN AVG(weight) IS NULL OR AVG(weight) = 0 OR AVG(length) IS NULL OR AVG(length) = 0
                     THEN 0 ELSE AVG(length) / AVG(weight) END AS mts_per_kg,
-               COALESCE(AVG(fabrication_charge_basic), 0) AS fab_charge_per_mt
+               AVG(fabrication_charge_basic) AS fab_charge_per_mt,
+               COUNT(fabrication_charge_basic) AS fab_rate_rows
            FROM product_specification
            WHERE product_code = :code
            GROUP BY product_code""",
@@ -388,29 +357,50 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
     if not spec:
         return {"data": None, "warning": f"SKU code {code} not found in product_specification."}
     row = spec[0]
-    mts_per_kg = row["mts_per_kg"] or 0
-    fab_charge_per_mt = row["fab_charge_per_mt"] or 0
+    mts_per_kg = float(row["mts_per_kg"] or 0)
 
-    fys = _contribution_fys(fy)
-    card = _rate_card(fys)
-    sale = _last_sale(code, fys)
+    card = latest_rate_card(fy)
+    sale = _last_sale(code, _contribution_fys(fy))
+    fab = fabricator(row["fab_charge_per_mt"], (row["fab_rate_rows"] or 0) > 0, mts_per_kg)
 
-    # PMC SKU Master cols G/H: the flat increase applies only to a non-zero
-    # base fab rate; a SKU without a Wt/Mt is costed at zero.
-    fab_base = fab_charge_per_mt * mts_per_kg
-    fab_increase = _FAB_RATE_INCREASE_PER_KG if fab_base else 0.0
-    fabricator = fab_base + fab_increase
+    # PMC SKU Master col H: a SKU without a Wt/Mt is costed at zero.
     costable = bool(card) and mts_per_kg > 0
-    mfg = (card["rm_price"] + card["conversion"] + fabricator) if costable else 0
+    rm = card["rm"]["price"] if costable else None
+    yarn = card["yarn"]["per_kg"] if costable else None
+    fabric_oh = card["fabric_overheads"]["per_kg"] if costable else None
+    mfg = (rm + yarn + fabric_oh + fab["per_kg"]) if costable else 0
 
     fy_label = lambda f: "FY " + f.replace("_", "-")
-    notes = []
+    warnings: list[dict] = []
+
+    def warn(code_: str, message: str, level: str = "warning"):
+        warnings.append({"code": code_, "level": level, "message": message})
+
     if not card:
-        notes.append("No month with a complete costing has been uploaded yet.")
-    elif mts_per_kg <= 0:
-        notes.append("This SKU has no Wt/Mt in the product specification, so it can't be costed — enter a variable cost manually.")
+        warn("no_rate_card", f"No month with complete costing (RM consumption and direct expenses) "
+                             f"has been uploaded for {fy_label(fy)} or earlier.")
+    else:
+        if card["fy_fallback"]:
+            warn("fy_fallback", f"No complete costing month in {fy_label(fy)} yet — costed on "
+                                f"{card['month']} {fy_label(card['fy'])} rates.")
+        if card["missing_particulars"]:
+            warn("missing_particulars", f"{card['month']} {fy_label(card['fy'])} direct expenses have no row for "
+                                        f"{', '.join(card['missing_particulars'])} — counted as ₹0.")
+    if fab["status"] == "no_wtmt":
+        warn("no_wtmt", "This SKU has no Wt/Mt in the product specification, so it can't be costed — "
+                        "enter a variable cost manually.")
+    elif fab["status"] == "rate_blank":
+        warn("fab_rate_blank", "No fabrication rate on file for this SKU in the product specification — "
+                               "Fabricator Cost is counted as ₹0, so Mfg Cost is understated. "
+                               "Enter a Variable Cost override or update the Ratio Master.")
+    elif fab["status"] == "rate_zero":
+        warn("fab_rate_zero", "Rate/Mt is 0 for this SKU in the product specification, so it carries "
+                              "no fabrication charge.", level="info")
     if not sale:
-        notes.append(f"No sales on record for this SKU in {fy_label(fy)} or earlier, so there is no historical selling price.")
+        warn("no_sales_history", f"No sales on record for this SKU in {fy_label(fy)} or earlier, "
+                                 f"so there is no historical selling price.", level="info")
+
+    cost_complete = costable and fab["status"] != "rate_blank" and not card["missing_particulars"]
 
     return {
         "data": {
@@ -419,23 +409,28 @@ def get_quote_builder_sku(code: int, fy: str = Query(FY)):
             "mts_per_kg": mts_per_kg,
             "has_cost_data": costable,
             "has_breakdown": costable,
+            "cost_complete": cost_complete,
             "fy": card["fy"] if card else None,
             "month": card["month"] if card else None,
             "mfg_cost_per_kg": mfg,
-            "rm_price": card["rm_price"] if costable else None,
-            "yarn_conversion": card["yarn_conversion"] if costable else None,
-            "fabric_addon": card["fabric_addon"] if costable else None,
-            "conversion_combined": bool(card and card["conversion_combined"]),
-            "fabricator_cost": fabricator if costable else None,
-            "fab_charge_per_mt": fab_charge_per_mt,
-            "fab_rate_increase": fab_increase,
+            "rm_price": rm,
+            "yarn_conversion": yarn,
+            "fabric_addon": fabric_oh,
+            # The live rate card always carries Yarn and Fabric Overheads separately.
+            "conversion_combined": False,
+            "fabricator_cost": fab["per_kg"] if costable else None,
+            "fab_charge_per_mt": fab["rate_per_mt"],
+            "fab_rate_increase": fab["increase_per_kg"],
+            "rate_card": card,
+            "fabricator": fab,
             "has_sales_history": bool(sale),
             "sales_fy": sale["fy"] if sale else None,
             "sales_month": sale["month"] if sale else None,
             "hist_avg_sp_per_kg": sale["selling_price_per_kg"] if sale else 0,
             "hist_purchase_rate_per_kg": sale["purchase_rate_per_kg"] if sale else 0,
+            "cost_warnings": warnings,
         },
-        "warning": " ".join(notes) or None,
+        "warning": " ".join(w["message"] for w in warnings) or None,
     }
 
 
@@ -453,6 +448,30 @@ def get_quote_builder_stock(code: int):
             {"code": code},
         )
     }
+
+
+@app.post("/quote_builder/bale_stock")
+async def parse_quote_builder_bale_stock(file: UploadFile = File(..., description="Bale Stock report (.xls/.xlsx)")):
+    """
+    Parse an uploaded Bale Stock report and return bale-level stock by location.
+
+    Processed entirely in memory: the file is not saved to disk and nothing is
+    written to the database. The client keeps the result and replaces it on the
+    next upload.
+    """
+    name = file.filename or ""
+    if Path(name).suffix.lower() not in {".xls", ".xlsx"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Upload the Bale Stock report as .xls or .xlsx.")
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    try:
+        report = parse_bale_stock(content, name)
+    except BaleStockError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=422, detail=f"The file could not be processed: {exc}")
+    print(f"[BALE STOCK] Parsed {name!r}: {len(report['rows'])} rows, as of {report['as_of']}")
+    return {"data": report}
 
 
 # ─── Upload & Process ─────────────────────────────────────────────────────────
