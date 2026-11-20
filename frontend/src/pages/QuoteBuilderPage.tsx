@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { Search, X, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, X, RotateCcw, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { monthLabel } from "@/lib/history";
+import { BaleStockReport } from "@/components/BaleStockReport";
 import { api } from "@/api";
-import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
+import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow, RateCardComponent } from "@/types";
 
 interface Props { fy?: string; }
 
@@ -17,7 +20,7 @@ type Verdict = "REJECT" | "CAUTION" | "ACCEPTABLE" | "STRONG";
 
 const VERDICT_STYLE: Record<Verdict, string> = {
     REJECT: "bg-destructive/15 text-destructive border-destructive/40",
-    CAUTION: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40",
+    CAUTION: "bg-warning/15 text-warning border-warning/40",
     ACCEPTABLE: "bg-primary/10 text-primary border-primary/30",
     STRONG: "bg-primary/20 text-primary border-primary/50",
 };
@@ -41,10 +44,66 @@ function num(v: number): string {
     return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function usePrefersReducedMotion(): boolean {
+    const [reduced, setReduced] = useState(
+        () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+    useEffect(() => {
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const handler = () => setReduced(mq.matches);
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+    }, []);
+    return reduced;
+}
+
+function easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+/**
+ * Smoothly tweens a displayed number toward `target` whenever it changes, instead of
+ * snapping — makes the Deal Verdict band read as live-recalculating rather than a static
+ * re-render. Interrupting mid-animation re-anchors from the current displayed value, so
+ * rapid keystrokes chain smoothly instead of jumping. Skips animation entirely under
+ * prefers-reduced-motion.
+ */
+function useAnimatedNumber(target: number, durationMs = 350): number {
+    const reducedMotion = usePrefersReducedMotion();
+    const [display, setDisplay] = useState(target);
+    const stateRef = useRef({ display: target, raf: 0 });
+
+    useEffect(() => {
+        if (reducedMotion || !Number.isFinite(target)) {
+            cancelAnimationFrame(stateRef.current.raf);
+            stateRef.current.display = target;
+            setDisplay(target);
+            return;
+        }
+        const from = stateRef.current.display;
+        if (from === target) return;
+        const start = performance.now();
+        cancelAnimationFrame(stateRef.current.raf);
+
+        function tick(now: number) {
+            const t = Math.min(1, (now - start) / durationMs);
+            const value = from + (target - from) * easeOutCubic(t);
+            stateRef.current.display = value;
+            setDisplay(value);
+            if (t < 1) stateRef.current.raf = requestAnimationFrame(tick);
+        }
+        stateRef.current.raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(stateRef.current.raf);
+    }, [target, durationMs, reducedMotion]);
+
+    return display;
+}
+
 export function QuoteBuilderPage({ fy }: Props) {
     const [skuOptions, setSkuOptions] = useState<QuoteBuilderSkuOption[]>([]);
     const [skuSearch, setSkuSearch] = useState("");
     const [skuOpen, setSkuOpen] = useState(false);
+    const [skuHighlight, setSkuHighlight] = useState(0);
     const [selectedCode, setSelectedCode] = useState<number | null>(null);
     const [inStockOnly, setInStockOnly] = useState(true);
 
@@ -84,9 +143,44 @@ export function QuoteBuilderPage({ fy }: Props) {
         const q = skuSearch.trim().toLowerCase();
         if (!q) return skuOptions.slice(0, 50);
         return skuOptions.filter(
-            o => o.product_name.toLowerCase().includes(q) || String(o.code).includes(q)
+            o => (o.product_name ?? "").toLowerCase().includes(q) || String(o.code).includes(q)
         ).slice(0, 50);
     }, [skuOptions, skuSearch]);
+
+    // Keep the highlighted option in range whenever the filtered list changes underneath it.
+    useEffect(() => {
+        setSkuHighlight(0);
+    }, [filteredSkus]);
+
+    function chooseSku(code: number) {
+        setSelectedCode(code);
+        setSkuOpen(false);
+        setSkuSearch("");
+    }
+
+    function onSkuSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (!skuOpen) {
+            if (e.key === "ArrowDown" || e.key === "Enter") {
+                setSkuOpen(true);
+                setSkuSearch("");
+            }
+            return;
+        }
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setSkuHighlight(i => Math.min(i + 1, filteredSkus.length - 1));
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setSkuHighlight(i => Math.max(i - 1, 0));
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            const opt = filteredSkus[skuHighlight];
+            if (opt) chooseSku(opt.code);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            setSkuOpen(false);
+        }
+    }
 
     const wtPerMt = sku?.mts_per_kg && sku.mts_per_kg > 0 ? 1 / sku.mts_per_kg : 0; // Wt/Mt = kg per metre
     const wtPerRoll = wtPerMt > 0 ? wtPerMt * (selectedCode != null && selectedCode < 300 ? 50 : 30) : 0;
@@ -104,11 +198,20 @@ export function QuoteBuilderPage({ fy }: Props) {
     const stockCovers = qty > 0 && stockTotalKg >= qty;
 
     const hasCostData = sku?.has_cost_data ?? false;
+    const hasSales = sku?.has_sales_history ?? hasCostData;
+    const rateCardLabel = sku?.month ? (sku.fy ? monthLabel(sku.fy, sku.month) : sku.month) : null;
+    const salesLabel = sku?.sales_month && sku.sales_fy ? monthLabel(sku.sales_fy, sku.sales_month) : null;
+    const sources = costSources(sku, rateCardLabel, salesLabel);
+    const fabStatus = sku?.fabricator?.status;
+    const financePerKg = sku?.rate_card?.fabric_overheads.finance_per_kg ?? 0;
     const liveVariableCost = sourcing === "Produce in-house"
         ? (sku?.mfg_cost_per_kg ?? 0)
         : purchRate;
     const variableCost = vcOverride !== null ? (parseFloat(vcOverride) || 0) : liveVariableCost;
     const variableCostIsKnown = vcOverride !== null || sourcing === "Purchase & resell" || hasCostData;
+    // The live Mfg Cost is missing or understated (no Wt/Mt, blank fab rate, missing expense rows).
+    // We still quote on it — the verdict carries a flag until the user overrides or buys in.
+    const costIncomplete = sourcing === "Produce in-house" && vcOverride === null && sku?.cost_complete === false;
 
     const contributionPerKg = proposedSalePrice - variableCost;
     const pvRatio = proposedSalePrice > 0 ? contributionPerKg / proposedSalePrice : 0;
@@ -127,6 +230,28 @@ export function QuoteBuilderPage({ fy }: Props) {
     const canQuote = proposedSalePrice > 0 && variableCostIsKnown;
     const selectedOption = skuOptions.find(o => o.code === selectedCode);
 
+    // Live Deal Verdict: every displayed number tweens toward its new value instead of
+    // snapping, and the verdict badge pulses when a keystroke pushes the deal across a
+    // REJECT/CAUTION/ACCEPTABLE/STRONG threshold.
+    const animVariableCost = useAnimatedNumber(variableCost);
+    const animContributionPerKg = useAnimatedNumber(contributionPerKg);
+    const animPvRatio = useAnimatedNumber(pvRatio);
+    const animTotalContribution = useAnimatedNumber(totalContribution);
+    const animFloorSp = useAnimatedNumber(floorSp);
+    const animSpFor15 = useAnimatedNumber(spFor15);
+
+    const [verdictPulsing, setVerdictPulsing] = useState(false);
+    const prevVerdictRef = useRef(verdict);
+    useEffect(() => {
+        if (canQuote && prevVerdictRef.current !== verdict) {
+            setVerdictPulsing(true);
+            const t = setTimeout(() => setVerdictPulsing(false), 500);
+            prevVerdictRef.current = verdict;
+            return () => clearTimeout(t);
+        }
+        prevVerdictRef.current = verdict;
+    }, [verdict, canQuote]);
+
     function resetDeal() {
         setRatePerMt("");
         setProposedQty("1");
@@ -136,50 +261,50 @@ export function QuoteBuilderPage({ fy }: Props) {
     }
 
     return (
-        <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-base font-semibold text-foreground">Quote Builder</h2>
-                    <p className="text-sm text-muted-foreground">Price a single deal against live PMC costing.</p>
-                </div>
-                {sku && (
-                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={resetDeal}>
-                        <RotateCcw size={13} /> Reset deal terms
-                    </Button>
-                )}
-            </div>
-
+        <div className="flex flex-col gap-3 min-w-0 w-full">
             {/* ── SKU picker ── */}
-            <Card className="card-elevated">
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <Card className="card-elevated py-0 gap-0">
+                <CardContent className="p-2.5 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="relative w-full sm:max-w-lg">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                         <Input
+                            role="combobox"
+                            aria-label="Search SKU code or product name"
+                            aria-expanded={skuOpen}
+                            aria-controls="sku-listbox"
+                            aria-autocomplete="list"
+                            aria-activedescendant={skuOpen && filteredSkus[skuHighlight] ? `sku-option-${filteredSkus[skuHighlight].code}` : undefined}
                             value={skuOpen ? skuSearch : (selectedOption ? `${selectedOption.code} — ${selectedOption.product_name}` : skuSearch)}
                             onChange={e => { setSkuSearch(e.target.value); setSkuOpen(true); }}
                             onFocus={() => { setSkuOpen(true); setSkuSearch(""); }}
+                            onKeyDown={onSkuSearchKeyDown}
                             placeholder="Search SKU code or product name…"
-                            className="h-10 pl-9 pr-8 text-sm"
+                            className="h-8 pl-9 pr-8 text-sm"
                         />
                         {selectedOption && !skuOpen && (
                             <button
                                 onClick={() => { setSelectedCode(null); setSkuSearch(""); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                aria-label="Clear selected SKU"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                             >
                                 <X size={14} />
                             </button>
                         )}
                         {skuOpen && (
-                            <div className="absolute z-40 mt-1 w-full max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
+                            <div id="sku-listbox" role="listbox" className="absolute z-40 mt-1 w-full max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
                                 {filteredSkus.length === 0 ? (
                                     <div className="px-3 py-3 text-sm text-muted-foreground">
                                         No matching SKUs{inStockOnly ? " with stock on hand." : "."}
                                     </div>
-                                ) : filteredSkus.map(o => (
+                                ) : filteredSkus.map((o, i) => (
                                     <button
                                         key={o.code}
-                                        onClick={() => { setSelectedCode(o.code); setSkuOpen(false); setSkuSearch(""); }}
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center gap-3"
+                                        id={`sku-option-${o.code}`}
+                                        role="option"
+                                        aria-selected={i === skuHighlight}
+                                        onClick={() => chooseSku(o.code)}
+                                        onMouseEnter={() => setSkuHighlight(i)}
+                                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${i === skuHighlight ? "bg-muted/50" : ""}`}
                                     >
                                         <span className="text-muted-foreground w-10 shrink-0 tabular-nums text-xs">{o.code}</span>
                                         <span className="text-foreground">{o.product_name}</span>
@@ -197,10 +322,16 @@ export function QuoteBuilderPage({ fy }: Props) {
                             type="checkbox"
                             checked={inStockOnly}
                             onChange={e => setInStockOnly(e.target.checked)}
-                            className="h-3.5 w-3.5 rounded border-border accent-primary"
+                            className="h-3.5 w-3.5 rounded border-border accent-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                         />
                         Only show SKUs with stock on hand
                     </label>
+
+                    {sku && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0 sm:ml-auto" onClick={resetDeal}>
+                            <RotateCcw size={13} /> Reset deal terms
+                        </Button>
+                    )}
                 </CardContent>
             </Card>
 
@@ -209,233 +340,393 @@ export function QuoteBuilderPage({ fy }: Props) {
             )}
 
             {skuLoading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Skeleton className="h-56" />
-                    <Skeleton className="h-56" />
+                <div className="flex flex-col gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Skeleton className="h-72" />
+                        <Skeleton className="h-72" />
+                    </div>
+                    <Skeleton className="h-28" />
                 </div>
             )}
 
             {!skuLoading && sku && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* ── Auto-filled SKU info ── */}
-                    <Card className="card-elevated">
+                <div className="flex flex-col gap-5">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* ── Auto-filled SKU info ── */}
+                        <Card className="card-elevated py-0 gap-0">
+                            <CardHeader className="py-3 px-4">
+                                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                    SKU — {sku.code}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
+                                <div className="font-semibold text-base text-foreground">{sku.product_name}</div>
+                                {sku.cost_warnings ? (
+                                    sku.cost_warnings.length > 0 && (
+                                        <ul className="flex flex-col gap-1">
+                                            {sku.cost_warnings.map(w => (
+                                                <li
+                                                    key={w.code}
+                                                    className={`flex items-start gap-1.5 text-xs rounded-md px-2 py-1.5 ${w.level === "warning" ? "text-warning bg-warning/10" : "text-muted-foreground bg-muted/40"}`}
+                                                >
+                                                    {w.level === "warning"
+                                                        ? <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                                                        : <Info size={12} className="shrink-0 mt-0.5" />}
+                                                    {w.message}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )
+                                ) : skuWarning && (
+                                    <p className="flex items-start gap-1.5 text-xs text-warning bg-warning/10 rounded-md px-2 py-1.5">
+                                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                                        {skuWarning}
+                                    </p>
+                                )}
+
+                                {/* Stock table and cost data run side by side — both fit comfortably without stacking */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
+                                            {stock.length > 0 && (
+                                                <span className="text-[10px] text-muted-foreground">
+                                                    as of {stock[0].as_of_date}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {stock.length === 0 ? (
+                                            <span className="text-muted-foreground text-xs">No stock snapshot for this SKU — zero on hand at last count.</span>
+                                        ) : (
+                                            <div className="rounded-md border border-border/50 overflow-hidden">
+                                                <table className="w-full text-xs">
+                                                    <thead>
+                                                        <tr className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                            <th className="text-left font-semibold px-2.5 py-1.5">Unit</th>
+                                                            <th className="text-right font-semibold px-2.5 py-1.5">Bales</th>
+                                                            <th className="text-right font-semibold px-2.5 py-1.5">Kg</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {stock.map(s => (
+                                                            <tr key={s.location} className="border-t border-border/30">
+                                                                <td className="px-2.5 py-1.5 text-foreground">{s.location}</td>
+                                                                <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.bales)}</td>
+                                                                <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.qty_kgs)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="border-t border-border/60 bg-muted/30">
+                                                            <td className="px-2.5 py-1.5 font-semibold text-foreground">Total</td>
+                                                            <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalBales)}</td>
+                                                            <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalKg)}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 sm:border-l sm:border-border/30 sm:pl-4">
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mfg cost breakdown</span>
+                                                {rateCardLabel && (
+                                                    <span className="text-[10px] text-muted-foreground">basis: {rateCardLabel}</span>
+                                                )}
+                                            </div>
+                                            <TooltipProvider delayDuration={150}>
+                                            <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
+                                                {sku.rate_card ? (
+                                                    <>
+                                                        <Row label="RM (base)" value={sku.has_breakdown ? num(sku.rate_card.rm.rate_base) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                        {sku.has_breakdown && (
+                                                            <Row sub label="+ Yield & wastage" value={num(sku.rate_card.rm.uplift_per_kg)} source={sources.rmUplift} />
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} source={sources.rm} />
+                                                )}
+                                                <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} source={sources.yarn} />
+                                                <Row
+                                                    label="Fabricator Cost"
+                                                    value={!sku.has_breakdown
+                                                        ? "No data"
+                                                        : fabStatus === "rate_blank"
+                                                        ? `${num(sku.fabricator_cost!)} · rate not on file`
+                                                        : num(sku.fabricator_cost!)}
+                                                    muted={!sku.has_breakdown || fabStatus === "rate_zero"}
+                                                    warn={sku.has_breakdown && fabStatus === "rate_blank"}
+                                                    source={sources.fabricator}
+                                                />
+                                                <Row
+                                                    label="Fabric Overheads"
+                                                    value={!sku.has_breakdown ? "No data" : sku.conversion_combined ? "in Yarn" : num(sku.fabric_addon!)}
+                                                    muted={!sku.has_breakdown || sku.conversion_combined}
+                                                    source={sources.fabricOverheads}
+                                                />
+                                                {sku.has_breakdown && financePerKg > 0 && (
+                                                    <span className="-mt-1 text-right text-[10px] text-muted-foreground tabular-nums">
+                                                        incl. ₹{num(financePerKg)} working-capital finance
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-1.5 pt-1.5 border-t border-border/30">
+                                                <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize source={sources.mfg} />
+                                            </div>
+                                            </TooltipProvider>
+                                        </div>
+
+                                        <div>
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Historical benchmarks</span>
+                                            <TooltipProvider delayDuration={150}>
+                                            <div className="flex flex-col gap-1.5 mt-1.5">
+                                                <Row label="Hist Purchase Rate ₹/Kg" value={hasSales ? num(sku.hist_purchase_rate_per_kg) : "No sales yet"} muted={!hasSales} source={sources.purchase} />
+                                                <Row label="Hist Avg SP ₹/Kg" value={hasSales ? num(sku.hist_avg_sp_per_kg) : "No sales yet"} muted={!hasSales} source={sources.sp} />
+                                                <Row
+                                                    label="Wt/Mt"
+                                                    value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
+                                                />
+                                            </div>
+                                            </TooltipProvider>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* ── Deal terms ── */}
+                        <Card className="card-elevated py-0 gap-0">
+                            <CardHeader className="py-3 px-4">
+                                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                    Quote Terms
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
+                                <Field label="Sourcing">
+                                    <Select value={sourcing} onValueChange={v => setSourcing(v as Sourcing)}>
+                                        <SelectTrigger size="sm" className="w-full h-9 text-sm">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Produce in-house">Produce in-house</SelectItem>
+                                            <SelectItem value="Purchase & resell">Purchase & resell</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+                                <Field label="Rate per Mt (₹/Metre)">
+                                    <Input type="number" step="0.05" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
+                                    {ratePerKgHint > 0 && (
+                                        <span className="text-[11px] text-muted-foreground">
+                                            (≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt)
+                                        </span>
+                                    )}
+                                </Field>
+                                <Field label="Proposed Sale Price ₹/Kg (auto)">
+                                    <div className="h-9 flex items-center px-3 rounded-md border border-border/50 bg-muted/30 font-semibold tabular-nums text-sm">
+                                        {wtPerMt > 0 ? (rate > 0 ? num(proposedSalePrice) : "—") : "Set Wt/Mt first"}
+                                    </div>
+                                </Field>
+                                {wtPerRoll > 0 && (
+                                    <Row label="Wt/Roll (kg)" value={wtPerRoll.toFixed(2)} />
+                                )}
+                                <Field label="Proposed Quantity (Kgs)">
+                                    <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-9 text-sm" />
+                                    {qty > 0 && (
+                                        <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-warning"}`}>
+                                            {stockCovers ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                                            {stockTotalKg <= 0
+                                                ? "No stock on hand — this quantity will need fresh production."
+                                                : stockCovers
+                                                ? `Covered by stock in hand (${num(stockTotalKg)} kg available).`
+                                                : `Exceeds stock in hand by ${num(stockShortfallKg)} kg (${num(stockTotalKg)} kg available) — shortfall needs production.`}
+                                        </span>
+                                    )}
+                                </Field>
+                                {sourcing === "Purchase & resell" && (
+                                    <Field label="Purchase Rate ₹/Kg">
+                                        <Input type="number" value={purchaseRate} onChange={e => setPurchaseRate(e.target.value)} className="h-9 text-sm" />
+                                    </Field>
+                                )}
+                                <Field label={`Variable Cost ₹/Kg${vcOverride === null ? " (live)" : " (override)"}`}>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            type="number"
+                                            value={vcOverride !== null ? vcOverride : liveVariableCost.toFixed(2)}
+                                            onChange={e => setVcOverride(e.target.value)}
+                                            className="h-9 text-sm"
+                                        />
+                                        {vcOverride !== null && (
+                                            <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px]" onClick={() => setVcOverride(null)}>
+                                                Use live
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {vcOverride === null && sourcing === "Produce in-house" && !hasCostData && (
+                                        <span className="text-[11px] text-warning">
+                                            No live Mfg Cost for this SKU — showing 0 until you enter an override.
+                                        </span>
+                                    )}
+                                </Field>
+                            </CardContent>
+                        </Card>
+
+                    </div>
+
+                    {/* ── Deal verdict — the payoff of the calculator, given full-width presence ── */}
+                    <Card className="card-elevated py-0 gap-0 overflow-hidden">
                         <CardHeader className="py-3 px-4">
                             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                SKU — {sku.code}
+                                Deal Verdict
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
-                            <div className="font-semibold text-base text-foreground">{sku.product_name}</div>
-                            {skuWarning && (
-                                <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-2 py-1.5">
-                                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                                    {skuWarning}
-                                </p>
-                            )}
-
-                            <div className="pb-3 border-b border-border/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stock in hand</span>
-                                    {stock.length > 0 && (
-                                        <span className="text-[10px] text-muted-foreground">
-                                            as of {stock[0].as_of_date}
+                        <CardContent className="px-0 pb-0">
+                            <div className="flex flex-col lg:flex-row lg:items-stretch">
+                                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border/60">
+                                    <StatTile label="Variable Cost ₹/Kg" value={variableCostIsKnown ? num(animVariableCost) : "No data"} muted={!variableCostIsKnown} />
+                                    <StatTile
+                                        label="Contribution ₹/Kg"
+                                        value={canQuote ? num(animContributionPerKg) : "—"}
+                                        negative={canQuote && contributionPerKg < 0}
+                                        lead
+                                    />
+                                    <StatTile label="P/V Ratio" value={canQuote ? `${(animPvRatio * 100).toFixed(1)}%` : "—"} />
+                                    <StatTile
+                                        label="Total Contribution (deal)"
+                                        value={canQuote ? `₹ ${num(animTotalContribution)}` : "—"}
+                                        negative={canQuote && totalContribution < 0}
+                                        lead
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center justify-center gap-1.5 px-5 py-4 lg:w-56 shrink-0 border-t lg:border-t-0 lg:border-l border-border/60 bg-muted/20">
+                                    <Badge
+                                        variant="outline"
+                                        className={`w-full justify-center py-2.5 text-xs font-semibold transition-colors duration-500 ease-out motion-reduce:transition-none ${verdictPulsing ? "animate-verdict-pulse" : ""} ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}
+                                    >
+                                        {canQuote ? VERDICT_LABEL[verdict] : "Enter Rate/Mt to see verdict"}
+                                    </Badge>
+                                    {costIncomplete && (
+                                        <span role="status" className="flex items-center gap-1 text-[11px] font-medium text-warning">
+                                            <AlertTriangle size={11} className="shrink-0" />
+                                            Cost incomplete — see SKU warnings
                                         </span>
                                     )}
                                 </div>
-                                {stock.length === 0 ? (
-                                    <span className="text-muted-foreground text-xs">No stock snapshot for this SKU — zero on hand at last count.</span>
-                                ) : (
-                                    <div className="rounded-md border border-border/50 overflow-hidden">
-                                        <table className="w-full text-xs">
-                                            <thead>
-                                                <tr className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                                    <th className="text-left font-semibold px-2.5 py-1.5">Unit</th>
-                                                    <th className="text-right font-semibold px-2.5 py-1.5">Bales</th>
-                                                    <th className="text-right font-semibold px-2.5 py-1.5">Kg</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {stock.map(s => (
-                                                    <tr key={s.location} className="border-t border-border/30">
-                                                        <td className="px-2.5 py-1.5 text-foreground">{s.location}</td>
-                                                        <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.bales)}</td>
-                                                        <td className="px-2.5 py-1.5 text-right tabular-nums text-foreground">{num(s.qty_kgs)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr className="border-t border-border/60 bg-muted/30">
-                                                    <td className="px-2.5 py-1.5 font-semibold text-foreground">Total</td>
-                                                    <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalBales)}</td>
-                                                    <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-primary">{num(stockTotalKg)}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-                                )}
                             </div>
-
-                            <div className="pb-3 border-b border-border/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mfg cost breakdown</span>
-                                    {sku.month && (
-                                        <span className="text-[10px] text-muted-foreground">basis: {sku.month}</span>
-                                    )}
-                                </div>
-                                <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-border/40">
-                                    <Row label="RM" value={sku.has_breakdown ? num(sku.rm_price!) : "No data"} muted={!sku.has_breakdown} />
-                                    <Row label="Yarn" value={sku.has_breakdown ? num(sku.yarn_conversion!) : "No data"} muted={!sku.has_breakdown} />
-                                    <Row label="Fabricator Cost" value={sku.has_breakdown ? num(sku.fabricator_cost!) : "No data"} muted={!sku.has_breakdown} />
-                                    <Row label="Fabric Overheads" value={sku.has_breakdown ? num(sku.fabric_addon!) : "No data"} muted={!sku.has_breakdown} />
-                                </div>
-                                <div className="mt-1.5 pt-1.5 border-t border-border/30">
-                                    <Row label="Mfg Cost ₹/Kg (total, live)" value={hasCostData ? num(sku.mfg_cost_per_kg) : "No data"} muted={!hasCostData} emphasize />
-                                </div>
-                            </div>
-
-                            <div>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Historical benchmarks</span>
-                                <div className="flex flex-col gap-2.5 mt-2">
-                                    <Row label="Hist Purchase Rate ₹/Kg" value={hasCostData ? num(sku.hist_purchase_rate_per_kg) : "No data"} muted={!hasCostData} />
-                                    <Row label="Hist Avg SP ₹/Kg" value={hasCostData ? num(sku.hist_avg_sp_per_kg) : "No data"} muted={!hasCostData} />
-                                    <Row
-                                        label="Wt/Mt"
-                                        value={wtPerMt ? `${wtPerMt.toFixed(4)} kg/m (≈ ${sku.mts_per_kg?.toFixed(2)} m/kg)` : "—"}
-                                    />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* ── Deal terms ── */}
-                    <Card className="card-elevated">
-                        <CardHeader className="py-3 px-4">
-                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                Quote Terms
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="px-4 pb-4 flex flex-col gap-3.5 text-sm">
-                            <Field label="Sourcing">
-                                <Select value={sourcing} onValueChange={v => setSourcing(v as Sourcing)}>
-                                    <SelectTrigger size="sm" className="w-full h-9 text-sm">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Produce in-house">Produce in-house</SelectItem>
-                                        <SelectItem value="Purchase & resell">Purchase & resell</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </Field>
-                            <Field label="Rate per Mt (₹/Metre)">
-                                <Input type="number" step="0.05" value={ratePerMt} onChange={e => setRatePerMt(e.target.value)} className="h-9 text-sm" placeholder="0.00" />
-                                {ratePerKgHint > 0 && (
-                                    <span className="text-[11px] text-muted-foreground">
-                                        (≈ ₹{ratePerKgHint.toFixed(2)}/kg at this SKU's Wt/Mt)
-                                    </span>
-                                )}
-                            </Field>
-                            <Field label="Proposed Sale Price ₹/Kg (auto)">
-                                <div className="h-9 flex items-center px-3 rounded-md border border-border/50 bg-muted/30 font-semibold tabular-nums text-sm">
-                                    {wtPerMt > 0 ? (rate > 0 ? num(proposedSalePrice) : "—") : "Set Wt/Mt first"}
-                                </div>
-                            </Field>
-                            {wtPerRoll > 0 && (
-                                <Row label="Wt/Roll (kg)" value={wtPerRoll.toFixed(2)} />
-                            )}
-                            <Field label="Proposed Quantity (Kgs)">
-                                <Input type="number" value={proposedQty} onChange={e => setProposedQty(e.target.value)} className="h-9 text-sm" />
-                                {qty > 0 && (
-                                    <span className={`flex items-center gap-1.5 text-[11px] ${stockCovers ? "text-primary" : "text-amber-600 dark:text-amber-400"}`}>
-                                        {stockCovers ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
-                                        {stockTotalKg <= 0
-                                            ? "No stock on hand — this quantity will need fresh production."
-                                            : stockCovers
-                                            ? `Covered by stock in hand (${num(stockTotalKg)} kg available).`
-                                            : `Exceeds stock in hand by ${num(stockShortfallKg)} kg (${num(stockTotalKg)} kg available) — shortfall needs production.`}
-                                    </span>
-                                )}
-                            </Field>
-                            {sourcing === "Purchase & resell" && (
-                                <Field label="Purchase Rate ₹/Kg">
-                                    <Input type="number" value={purchaseRate} onChange={e => setPurchaseRate(e.target.value)} className="h-9 text-sm" />
-                                </Field>
-                            )}
-                            <Field label={`Variable Cost ₹/Kg${vcOverride === null ? " (live)" : " (override)"}`}>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        type="number"
-                                        value={vcOverride !== null ? vcOverride : liveVariableCost.toFixed(2)}
-                                        onChange={e => setVcOverride(e.target.value)}
-                                        className="h-9 text-sm"
-                                    />
-                                    {vcOverride !== null && (
-                                        <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px]" onClick={() => setVcOverride(null)}>
-                                            Use live
-                                        </Button>
-                                    )}
-                                </div>
-                                {vcOverride === null && sourcing === "Produce in-house" && !hasCostData && (
-                                    <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                                        No live Mfg Cost for this SKU — showing 0 until you enter an override.
-                                    </span>
-                                )}
-                            </Field>
-                        </CardContent>
-                    </Card>
-
-                    {/* ── Results ── */}
-                    <Card className="card-elevated">
-                        <CardHeader className="py-3 px-4">
-                            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                Results
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="px-4 pb-4 flex flex-col gap-2.5 text-sm">
-                            <Row label="Variable Cost ₹/Kg" value={variableCostIsKnown ? num(variableCost) : "No data"} muted={!variableCostIsKnown} />
-                            <Row
-                                label="Contribution ₹/Kg"
-                                value={canQuote ? num(contributionPerKg) : "—"}
-                                emphasize
-                                negative={canQuote && contributionPerKg < 0}
-                            />
-                            <Row label="P/V Ratio" value={canQuote ? `${(pvRatio * 100).toFixed(1)}%` : "—"} />
-                            <Row
-                                label="Total Contribution (deal)"
-                                value={canQuote ? `₹ ${num(totalContribution)}` : "—"}
-                                emphasize
-                                negative={canQuote && totalContribution < 0}
-                            />
-                            <div className="mt-1 pt-2.5 border-t border-border/30 flex flex-col gap-2">
-                                <Row label="Floor SP (do not quote below)" value={variableCostIsKnown ? num(floorSp) : "No data"} muted={!variableCostIsKnown} />
-                                <Row label="SP for 15% margin" value={variableCostIsKnown ? num(spFor15) : "No data"} muted={!variableCostIsKnown} />
-                            </div>
-                            <div className="mt-2">
-                                <Badge variant="outline" className={`w-full justify-center py-2 text-xs font-semibold ${canQuote ? VERDICT_STYLE[verdict] : "bg-muted text-muted-foreground border-border"}`}>
-                                    {canQuote ? VERDICT_LABEL[verdict] : "Enter Rate/Mt to see verdict"}
-                                </Badge>
+                            <div className="flex flex-wrap gap-x-8 gap-y-1.5 px-4 py-3 border-t border-border/60 text-xs">
+                                <span className="text-muted-foreground">
+                                    Floor SP (do not quote below): <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(animFloorSp) : "No data"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                    SP for 15% margin: <span className={`font-medium tabular-nums ${variableCostIsKnown ? "text-foreground" : ""}`}>{variableCostIsKnown ? num(animSpFor15) : "No data"}</span>
+                                </span>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
             )}
+
+            {/* ── Bale-wise stock from the uploaded Bale Stock report (session-only) ── */}
+            <BaleStockReport skuName={sku?.product_name} />
         </div>
     );
 }
 
+/** Label sits beside its control instead of stacked above it, to keep each field to one row. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-            {children}
+        <label className="flex items-center gap-3">
+            <span className="w-36 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground leading-snug">{label}</span>
+            <div className="flex-1 min-w-0 flex flex-col gap-1">{children}</div>
         </label>
     );
 }
 
-function Row({ label, value, emphasize, negative, muted }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean }) {
+/** "Wages-Yarn ₹8,65,380, Power Bill ₹6,34,291, …" — the month's lines behind a rate-card component. */
+function itemsText(c: RateCardComponent): string {
+    return c.items
+        .filter(i => i.amount !== 0 || !i.present)
+        .map(i => `${i.particular} ${i.present ? `₹${num(i.amount)}` : "(no row, ₹0)"}`)
+        .join(", ");
+}
+
+/** Where each Quote Builder figure comes from — shown on hover, built from the figures the backend used. */
+function costSources(sku: QuoteBuilderSku | null, rateCard: string | null, sales: string | null) {
+    const card = rateCard ? `${rateCard} rate card` : "Rate card";
+    const rc = sku?.rate_card;
+    const rmKg = rc ? rc.rm.qty.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : "";
+    const fab = sku?.fabricator;
+    let fabricator: string;
+    if (!fab) {
+        fabricator = "Product specification: fabrication charge ₹/mt × m/kg, plus the PMC rate increase.";
+    } else if (fab.status === "ok") {
+        fabricator = `Product specification (not the rate card): fabrication charge ₹${num(fab.rate_per_mt ?? 0)}/mt × ${num(fab.mts_per_kg)} m/kg = ₹${num(fab.base_per_kg)}/kg, plus the ₹${num(fab.increase_per_kg)}/kg PMC rate increase = ₹${num(fab.per_kg)}/kg.`;
+    } else if (fab.status === "rate_zero") {
+        fabricator = "Product specification: Rate/Mt is 0 for this SKU, so it carries no fabrication charge.";
+    } else if (fab.status === "rate_blank") {
+        fabricator = "Product specification: no fabrication rate on file for this SKU, so it is counted as ₹0 and Mfg Cost is understated.";
+    } else {
+        fabricator = "Product specification: this SKU has no Wt/Mt, so it can't be costed.";
+    }
+    const resold = rc?.rm.resold ?? [];
+    const resoldText = resold.length
+        ? ` Resold RM is taken out at average cost: ${resold
+            .map(r => `${r.material} ${r.qty.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg @ ₹${num(r.avg_cost_per_kg)}/kg (file rate ₹${num(r.qty ? r.value_in_file / r.qty : 0)})`)
+            .join(", ")}. The Consumption page shows ₹${num(rc!.rm.consumption_page_rate)}/kg because it uses the file's rate.`
+        : "";
+    return {
+        rm: rc
+            ? `${card}: ${rmKg} kg raw material (HDPE + MB + CP) consumed — opening + purchases − resold − closing — at ₹${num(rc.rm.rate_base)}/kg.${resoldText}`
+            : `${card}: raw-material consumption ₹/kg (Consumption: value ÷ qty) × yield × wastage.`,
+        rmUplift: rc
+            ? `PMC Rate Card: ₹${num(rc.rm.rate_base)} base × ${rc.rm.yield} yield × ${(1 + rc.rm.wastage_pct).toFixed(2)} wastage = ₹${num(rc.rm.price)}/kg, so +₹${num(rc.rm.uplift_per_kg)}/kg. Included in Mfg Cost.`
+            : "",
+        yarn: rc
+            ? `${card}: ${itemsText(rc.yarn)} = ₹${num(rc.yarn.total)} (Direct Expenses) ÷ ${rmKg} kg RM consumed = ₹${num(rc.yarn.per_kg)}/kg.`
+            : `${card}: variable yarn expenses (Direct Expenses) ÷ kg of RM consumed.`,
+        fabricOverheads: rc
+            ? `${card}: ${itemsText(rc.fabric_overheads)} = ₹${num(rc.fabric_overheads.total)} (Direct Expenses) ÷ ${rmKg} kg RM consumed = ₹${num(rc.fabric_overheads.per_kg)}/kg, of which ₹${num(rc.fabric_overheads.finance_per_kg)}/kg is working-capital finance (Bank, LC, OCC).`
+            : `${card}: variable fabric expenses and working-capital charges (Direct Expenses) ÷ kg of RM consumed.`,
+        fabricator,
+        mfg: "RM base + yield & wastage + Yarn + Fabric Overheads + Fabricator Cost, as in the PMC SKU Master.",
+        sp: sales
+            ? `Contribution, ${sales}: this SKU's realised selling price (sales value ÷ kg sold) in its latest month with sales.`
+            : "This SKU has no sales on record, so there is no historical selling price.",
+        purchase: sales
+            ? `Contribution, ${sales}: trading purchases of this SKU (purchase register) value ÷ kg; 0 when none were bought for resale.`
+            : "This SKU has no sales on record.",
+    };
+}
+
+function Row({ label, value, emphasize, negative, muted, warn, sub, source }: { label: string; value: string; emphasize?: boolean; negative?: boolean; muted?: boolean; warn?: boolean; sub?: boolean; source?: string }) {
     return (
-        <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">{label}</span>
-            <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : "font-medium"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
+        <div className={`flex items-center justify-between gap-3 ${sub ? "-mt-1 pl-3 text-xs" : ""}`}>
+            {source ? (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span tabIndex={0} className="text-muted-foreground underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 cursor-help outline-none focus-visible:text-foreground">
+                            {label}
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" sideOffset={6} className="max-w-72 leading-relaxed">{source}</TooltipContent>
+                </Tooltip>
+            ) : (
+                <span className="text-muted-foreground">{label}</span>
+            )}
+            <span className={`tabular-nums ${emphasize ? "font-semibold text-base" : sub ? "font-normal" : "font-medium"} ${negative ? "text-destructive" : warn ? "text-warning" : muted || sub ? "text-muted-foreground" : emphasize ? "text-primary" : "text-foreground"}`}>
+                {value}
+            </span>
+        </div>
+    );
+}
+
+/** Stat tile for the Deal Verdict band — mirrors the app's StatStrip visual language. */
+function StatTile({ label, value, negative, muted, lead }: { label: string; value: string; negative?: boolean; muted?: boolean; lead?: boolean }) {
+    return (
+        <div className={`bg-card px-4 py-3.5 flex flex-col justify-between gap-1.5 min-w-0 ${lead ? "bg-primary/[0.05]" : ""}`}>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">{label}</span>
+            <span className={`font-display font-semibold tabular-nums truncate ${lead ? "text-xl" : "text-base"} ${negative ? "text-destructive" : muted ? "text-muted-foreground" : lead ? "text-primary" : "text-foreground"}`}>
                 {value}
             </span>
         </div>

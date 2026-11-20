@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendChart } from "@/components/TrendChart";
-import { DetailedBreakdown } from "@/components/DetailedBreakdown";
-import { HeroMetricsPanel } from "@/components/HeroMetricsPanel";
+import { LedgerBoard } from "@/components/LedgerBoard";
+import { BreakdownGrid } from "@/components/BreakdownGrid";
+import { StatStrip } from "@/components/StatStrip";
 import type { ColDef } from "@/components/LedgerTable";
 import { api } from "@/api";
 import { fmt } from "@/lib/format";
 import type { ViewMode } from "@/types";
-import { MONTH_ORDER } from "@/types";
+import { fetchHistory, type HistPoint } from "@/lib/history";
 
 interface Props { months: string[]; viewMode: ViewMode; prevMonths: string[]; fy?: string; }
 interface MatRow { month: string; material: string;[k: string]: any; }
@@ -15,7 +16,7 @@ interface MatRow { month: string; material: string;[k: string]: any; }
 export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
     const [data, setData] = useState<MatRow[]>([]);
     const [prevData, setPrevData] = useState<MatRow[]>([]);
-    const [allData, setAllData] = useState<MatRow[]>([]);
+    const [trendHist, setTrendHist] = useState<HistPoint<MatRow>[]>([]);
     const [loading, setLoading] = useState(true);
     const [trendOption, setTrendOption] = useState<string>("");
 
@@ -30,17 +31,16 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
 
     useEffect(() => {
         setLoading(true);
-        const allMonths = MONTH_ORDER.slice(0, Math.max(MONTH_ORDER.indexOf(cur as any) + 1, 1));
         Promise.all([
             api.consumption(months, fy),
             prevMonths.length ? api.consumption(prevMonths, fy) : Promise.resolve({ data: [] }),
-            api.consumption(allMonths, fy),
-        ]).then(([r, p, all]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setAllData(all.data as MatRow[]); setLoading(false); });
-    }, [months.join(","), prevMonths.join(",")]);
+            fetchHistory<MatRow>(api.consumption, fy, cur),
+        ]).then(([r, p, h]) => { setData(r.data as MatRow[]); setPrevData(p.data as MatRow[]); setTrendHist(h); setLoading(false); });
+    }, [months.join(","), prevMonths.join(","), fy]);
 
     if (loading) return (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28" />)}
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
     );
 
@@ -65,18 +65,20 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
         { label: "Consumption", qk: "qty", vk: "value", rk: "rate" },
     ];
 
-    const trendData = MONTH_ORDER.slice(0, MONTH_ORDER.indexOf(cur as any) + 1).map(m => {
-        const matRow = allData.find(r => r.material === trendOption && r.month === m);
+    const trendData = trendHist.map(pt => {
+        const matRow = pt.rows.find(r => r.material === trendOption);
         return {
-            month: m,
+            month: pt.label,
             value: matRow?.value ?? 0,
             rate: matRow?.rate ?? (matRow?.qty ? (matRow.value / matRow.qty) : 0),
             qty: matRow?.qty ?? 0,
         };
     });
 
+    /** Builds a component table for one material — always uses the full selected `months` set
+     *  (rather than only months where that material has data) so every material shares identical columns
+     *  and can live in one unified ledger. */
     const buildMatTable = (mat: string): { cols: ColDef[]; rows: Record<string, string>[] } => {
-        const avail = months.filter(m => data.some(r => r.material === mat && r.month === m));
         if (viewMode === "single") {
             const row = data.find(r => r.material === mat && r.month === cur);
             return {
@@ -94,9 +96,7 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
                 })),
             };
         }
-        const orderedM = viewMode === "mty-all"
-            ? [avail[avail.length - 1], ...avail.slice(0, -1)]
-            : avail;
+        const orderedM = viewMode === "mty-all" ? [months[months.length - 1], ...months.slice(0, -1)] : months;
         const cols: ColDef[] = [
             { key: "label", header: "Component", isLabel: true },
             ...orderedM.flatMap(m => [
@@ -116,48 +116,53 @@ export function ConsumptionPage({ months, viewMode, prevMonths, fy }: Props) {
         return { cols, rows };
     };
 
+    const groupsRaw = materials.map(mat => ({ title: mat, ...buildMatTable(mat) }));
+    const cols = groupsRaw[0]?.cols ?? [{ key: "label", header: "Component", isLabel: true }];
+
     return (
         <div className="flex flex-col gap-4 min-w-0 w-full">
-            <div className="flex flex-col xl:flex-row gap-4">
-                <div className="flex-1 min-w-0">
-                    <TrendChart
-                        title={`${trendOption} Trend`}
-                        data={trendData}
-                        dataKey="value"
-                        combo
-                        barKey="value"
-                        lineKey="rate"
-                        qtyKey="qty"
-                        options={materials}
-                        selectedOption={trendOption}
-                        onOptionChange={setTrendOption}
-                        barRupee
-                        lineRupee
-                    />
-                </div>
-                <HeroMetricsPanel
-                    metrics={[
-                        { title: "Total Value", value: totVal, prevValue: prevTotVal, rupee: true, deltaMode: "neutral" },
-                        { title: "Total Qty", value: totQty, prevValue: prevTotQty, deltaMode: "neutral" },
-                    ]}
-                />
-            </div>
+            <StatStrip
+                leadFirst
+                stats={[
+                    { title: "Total Value", value: totVal, prevValue: prevTotVal, rupee: true, deltaMode: "neutral" },
+                    { title: "Total Qty", value: totQty, prevValue: prevTotQty, deltaMode: "neutral" },
+                ]}
+            />
 
-            <DetailedBreakdown sections={materials.map(mat => {
-                const rd = curData.find(r => r.material === mat);
-                const prevRd = prevCurData.find(r => r.material === mat);
-                const { cols, rows } = buildMatTable(mat);
-                return {
-                    title: mat,
-                    cols,
-                    rows,
-                    heroes: [
-                        { title: "Qty", value: rd?.qty ?? null, prevValue: prevRd?.qty ?? null, deltaMode: "neutral" as const },
-                        { title: "Value", value: rd?.value ?? null, prevValue: prevRd?.value ?? null, rupee: true, deltaMode: "neutral" as const },
-                        { title: "Rate", value: rd?.rate ?? null, prevValue: prevRd?.rate ?? null, deltaMode: "neutral" as const },
-                    ],
-                };
-            })} />
+            <TrendChart
+                title={`${trendOption} Trend`}
+                data={trendData}
+                dataKey="value"
+                combo
+                barKey="value"
+                lineKey="rate"
+                qtyKey="qty"
+                options={materials}
+                selectedOption={trendOption}
+                onOptionChange={setTrendOption}
+                barRupee
+                lineRupee
+            />
+
+            {viewMode === "single" ? (
+                <BreakdownGrid
+                    rupee
+                    groups={materials.map(mat => {
+                        const row = data.find(r => r.material === mat && r.month === cur);
+                        return {
+                            title: mat,
+                            rows: COMPS.map(c => ({ label: c.label, value: row?.[c.vk] ?? null })),
+                            sortRows: false,
+                        };
+                    })}
+                />
+            ) : (
+                <LedgerBoard
+                    cols={cols}
+                    defaultOpenCount={1}
+                    groups={groupsRaw.map(g => ({ title: g.title, rows: g.rows }))}
+                />
+            )}
         </div>
     );
 }
