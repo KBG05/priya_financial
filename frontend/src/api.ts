@@ -1,7 +1,7 @@
 // Backend is always reached on the same host the frontend was loaded from.
 const BASE = `${window.location.protocol}//${window.location.hostname}:8080`;
 
-import type { QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
+import type { BaleStockReport, QuoteBuilderSku, QuoteBuilderSkuOption, QuoteBuilderStockRow } from "@/types";
 
 async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
     const url = new URL(BASE + path);
@@ -24,6 +24,23 @@ export const api = {
     quoteBuilderSkus: (fy?: string, inStockOnly?: boolean) => get<{ data: QuoteBuilderSkuOption[] }>("/quote_builder/skus", { ...(fy ? { fy } : {}), ...(inStockOnly ? { in_stock_only: "true" } : {}) }),
     quoteBuilderSku: (code: number, fy?: string) => get<{ data: QuoteBuilderSku | null; warning?: string }>(`/quote_builder/sku/${code}`, fy ? { fy } : undefined),
     quoteBuilderStock: (code: number) => get<{ data: QuoteBuilderStockRow[]; warning?: string }>(`/quote_builder/stock/${code}`),
+    /** Parse a Bale Stock report in memory on the server; nothing is stored. Throws with the server's message on failure. */
+    parseBaleStock: async (file: File): Promise<BaleStockReport> => {
+        const form = new FormData();
+        form.append("file", file);
+        let res: Response;
+        try {
+            res = await fetch(`${BASE}/quote_builder/bale_stock`, { method: "POST", body: form });
+        } catch {
+            throw new Error("Could not reach the server. Check your connection and try again.");
+        }
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+            const detail = body?.detail;
+            throw new Error(typeof detail === "string" ? detail : `Upload failed (HTTP ${res.status}).`);
+        }
+        return body.data as BaleStockReport;
+    },
     uploadAndProcess: async (params: {
         coreFile?: File | null;
         balanceFile?: File | null;
