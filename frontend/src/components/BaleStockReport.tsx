@@ -104,7 +104,8 @@ export function BaleStockReport({ skuName }: { skuName?: string | null }) {
         const q = norm(search);
         return report.rows.filter(r =>
             (location === "__all__" || r.location === location) &&
-            (!q || norm(r.item).includes(q) || norm(r.bale_no).includes(q))
+            (!q || norm(r.item).includes(q) || norm(r.bale_no).includes(q) ||
+                norm(r.description ?? "").includes(q) || (r.code != null && String(r.code) === q))
         );
     }, [report, location, search]);
 
@@ -218,7 +219,7 @@ export function BaleStockReport({ skuName }: { skuName?: string | null }) {
                                 <Input
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
-                                    placeholder="Search bale no or item…"
+                                    placeholder="Search bale no, item or code…"
                                     className="h-9 pl-9 pr-8 text-sm"
                                 />
                                 {search && (

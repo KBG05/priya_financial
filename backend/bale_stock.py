@@ -46,11 +46,15 @@ _COMPANY_PREFIX_RE = re.compile(r"^.*?\b(?:limited|ltd)\b\.?[\s\-:]*", re.I)
 # Normalised header text -> field name
 _HEADERS = {
     "baleno": "bale_no",
-    "item": "item",
+    "item": "item",              # older layout: "Item"
+    "itemcode": "item",          # newer layout: "Item Code" (same text, e.g. HF54"BLUE)
+    "description": "description",
+    "commoncode": "code",        # SKU / product code
+    "category": "category",
     "qtykgs": "qty_kgs",
     "qtymts": "qty_mts",
 }
-_REQUIRED = {"bale_no", "item", "qty_kgs"}
+_REQUIRED = {"bale_no", "qty_kgs"}   # plus an item or description column, checked below
 
 
 class BaleStockError(ValueError):
@@ -132,9 +136,11 @@ def _sheets(content: bytes) -> Iterator[tuple[str, Iterable[list]]]:
 
 # ─── Parser ────────────────────────────────────────────────────────────────────
 
-def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional[str], bool]:
-    """Returns (bale rows, block totals from the report, as-on date, header seen)."""
+def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional[str], bool, list[dict]]:
+    """Returns (bale rows, block totals from the report, as-on date, header seen,
+    bale lines skipped because the report gives them no quantity)."""
     out: list[dict] = []
+    skipped: list[dict] = []
     block_totals: list[dict] = []
     as_of: Optional[str] = None
     location = ""
@@ -168,7 +174,7 @@ def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional
         normed = [_norm(c) for c in cells]
         if "baleno" in normed and ("qtykgs" in normed):
             cols = {_HEADERS[n]: i for i, n in enumerate(normed) if n in _HEADERS}
-            if not _REQUIRED <= cols.keys():
+            if not _REQUIRED <= cols.keys() or not ({"item", "description"} & cols.keys()):
                 cols = None
                 continue
             header_seen = True
@@ -183,11 +189,14 @@ def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional
             return cells[i] if i is not None and i < len(cells) else None
 
         bale_no = _text(cell("bale_no"))
-        item = _text(cell("item"))
+        description = _text(cell("description"))
+        item = _text(cell("item")) or description
         kgs = _number(cell("qty_kgs"))
         mts = _number(cell("qty_mts"))
+        code = _number(cell("code"))
 
-        if not bale_no and item.lower() == "total":
+        # The "Total" label sits in a different column depending on the layout.
+        if not bale_no and any(t.lower() == "total" for t in texts):
             block_totals.append({
                 "location": location,
                 "mixed": mixed,
@@ -198,12 +207,19 @@ def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional
             cols = None
             continue
 
-        if not bale_no or kgs is None:
+        if not bale_no:
+            continue
+        if kgs is None:
+            # Some exports list bales with only a category and no item or quantity.
+            skipped.append({"bale_no": bale_no, "category": _text(cell("category")) or "Uncategorised"})
             continue
 
         out.append({
             "bale_no": bale_no,
             "item": item,
+            "description": description,
+            "code": int(code) if code is not None and code.is_integer() else None,
+            "category": _text(cell("category")),
             "qty_kgs": kgs,
             "qty_mts": mts if mts is not None else 0.0,
             "location": _short_location(location) if location else "—",
@@ -211,7 +227,7 @@ def _parse_sheet(rows: Iterable[list]) -> tuple[list[dict], list[dict], Optional
             "mixed": mixed,
         })
 
-    return out, block_totals, as_of, header_seen
+    return out, block_totals, as_of, header_seen, skipped
 
 
 def parse_bale_stock(content: bytes, filename: str = "") -> dict:
@@ -231,12 +247,14 @@ def parse_bale_stock(content: bytes, filename: str = "") -> dict:
     as_of: Optional[str] = None
     any_header = False
     sheet_names: list[str] = []
+    skipped: list[dict] = []
 
     for name, sheet_rows in _sheets(content):
         sheet_names.append(name)
-        r, t, a, h = _parse_sheet(sheet_rows)
+        r, t, a, h, s = _parse_sheet(sheet_rows)
         rows.extend(r)
         totals.extend(t)
+        skipped.extend(s)
         as_of = as_of or a
         any_header = any_header or h
 
@@ -254,6 +272,16 @@ def parse_bale_stock(content: bytes, filename: str = "") -> dict:
         for t in totals
         if abs(t["parsed_kgs"] - t["report_kgs"]) > 0.01
     ]
+    if skipped:
+        by_cat: dict[str, int] = {}
+        for s in skipped:
+            by_cat[s["category"]] = by_cat.get(s["category"], 0) + 1
+        warnings.append(
+            f"{len(skipped):,} line(s) across {len({s['bale_no'] for s in skipped}):,} bale(s) have no item or "
+            f"quantity in the report and are not shown ("
+            + ", ".join(f"{c}: {n:,}" for c, n in sorted(by_cat.items(), key=lambda kv: -kv[1]))
+            + ")."
+        )
 
     locations: dict[str, dict] = {}
     for r in rows:

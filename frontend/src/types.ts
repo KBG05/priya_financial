@@ -164,6 +164,10 @@ export interface QuoteBuilderStockRow {
 export interface BaleStockRow {
     bale_no: string;
     item: string;
+    /** Newer report layout only (Description / Common Code / Category columns). */
+    description?: string;
+    code?: number | null;
+    category?: string;
     qty_kgs: number;
     qty_mts: number;
     location: string;
